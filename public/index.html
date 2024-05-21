@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="robots" content="index,follow">
+    <meta content="JUN-SUZUのホームページです。JUN-SUZUは、日本の学生プログラマーです。大半のアプリケーションを開発できます。" name="description">
+    <meta name="keywords" content="JUN-SUZU,プログラマー,アプリケーション,開発">
+    <meta name="author" content="JUN-SUZU">
+    <meta name="cpr" content="© 2024 JUN-SUZU">
+    <meta name="language" content="ja">
+    <meta name="format-detection" content="telephone=no,email=no,address=no">
+    <meta name="theme-color" content="#ff207d">
+    <link rel="canonical" href="https://jun-suzu.net/">
+    <link rel="icon" href="./assets/img/favicon.ico">
+    <title>KOKONE</title>
+    <link rel="stylesheet" type="text/css" href="./css/reset.css">
+    <link rel="stylesheet" type="text/css" href="./css/style.css">
+</head>
+
+<body>
+    <header>
+        <a href="https://kokone.jun-suzu.net">
+            <h1>KOKONE</h1>
+        </a>
+    </header>
+    <main>
+        <section id="description">
+            <h2>KOKONEはDiscordの音楽BOTです。</h2>
+            <p>YouTubeとSpotifyの音楽を再生できます。</p>
+            <p>URL,検索ワード,プレイリストの再生に対応しています。 </p>
+            <p>音量の調整や、ループ再生や、キューに登録などの一般的な機能は全て備えています。</p>
+        </section>
+        <section>
+            <h2>Commands</h2>
+            <div class="place__holder">
+                <div class="panel__command">
+                    <h3>/play</h3>
+                    <p>音楽を再生します。</p>
+                    <p>URL,検索ワード,プレイリストの再生に対応しています。</p>
+                    <p>例: <code><span>/play https://www.youtube.com/watch?v=xxxxxxxxxxx</span></code></p>
+                </div>
+                <div class="panel__command">
+                    <h3>/stop</h3>
+                    <p>再生中の音楽を停止します。</p>
+                </div>
+                <div class="panel__command">
+                    <h3>/skip</h3>
+                    <p>再生中の音楽をスキップします。</p>
+                </div>
+                <div class="panel__command">
+                    <h3>/repeat</h3>
+                    <p>再生中の音楽をループ再生します。</p>
+                    <p>最大で1000回までループ再生できます。</p>
+                    <p>例: <code><span>/repeat 10</span></code></p>
+                </div>
+                <div class="panel__command">
+                    <h3>/queue</h3>
+                    <p>再生予定の音楽を表示します。</p>
+                </div>
+                <div class="panel__command">
+                    <h3>/volume</h3>
+                    <p>音量を調整します。</p>
+                    <p>最大で200%まで調整できます。</p>
+                    <p>例: <code><span>/volume 50</span></code></p>
+                </div>
+                <div class="panel__command">
+                    <h3>/history</h3>
+                    <p>過去10曲の再生履歴を表示します。</p>
+                    <p>再生履歴から選択して再生することもできます。</p>
+                </div>
+            </div>
+        </section>
+        <section>
+            <h2>Invite</h2>
+            <p>以下のリンクからKOKONEを招待できます。</p>
+            <a href="https://discord.com/oauth2/authorize?client_id=1188932280505335849&permissions=8&scope=bot+applications.commands"
+                target="_blank" rel="noopener noreferrer" class="link__invite">KOKONEを招待する</a>
+        </section>
+    </main>
+    <footer>
+    </footer>
+    <script src="./index.js"></script>
+
+</body>
+
+</html>

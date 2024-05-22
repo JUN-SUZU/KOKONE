@@ -5,12 +5,14 @@ a.link__invite {
   padding: 0.5rem;
   text-align: center;
   background-color: #ff207d;
-  color: white;
+  color: black;
+  font-weight: bold;
   border-radius: 0.5rem;
   transition: 0.3s;
 }
 a.link__invite:hover {
-  background-color: #ec0062;
+  filter: brightness(1.1);
+  transform: scale(1.1);
 }
 
 .place__holder {

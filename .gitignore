@@ -1,3 +1,5 @@
 .vscode
 config.json
 staticInfo.json
+searchCache.json
+videoCache.json

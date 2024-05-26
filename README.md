@@ -26,9 +26,9 @@ MIT ライセンスです。
 
 ## 作者
 
-JUN-SUZU
+[JUN-SUZU](https://jun-suzu.net)
 © 2024 JUN-SUZU
 
 ## バージョン
 
-1.0.5
+1.2.0

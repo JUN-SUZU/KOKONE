@@ -8,6 +8,7 @@ const youtubeNode = require('youtube-node');
 const youtube = new youtubeNode();
 youtube.setKey(config.youtubeApiKey);
 youtube.addParam('type', 'video');
+const ytpl = require('ytpl');
 // download from youtube
 const ytdl = require('ytdl-core');
 // other modules
@@ -83,13 +84,61 @@ client.on('interactionCreate', async (interaction) => {
             const keyword = interaction.options.getString('keyword');
             let query = keyword;
             let videoId = [];
-            // 検索キーワードかurlか判定
+            // 検索キーワードかurlかプレイリストか判定
             // https://youtu.be/CdZN8PI3MqM
             // https://www.youtube.com/watch?v=CdZN8PI3MqM
             // https://music.youtube.com/watch?v=CdZN8PI3MqM
-            if (query.match(/https:\/\/(www\.|music\.)?youtube\.com\/watch\?v=[a-zA-Z0-9_-]{11}/) || query.match(/https:\/\/youtu\.be\/[a-zA-Z0-9_-]{11}/)) {
+            // https://youtube.com/watch?v=CdZN8PI3MqM
+            // https://www.youtube.com/CdZN8PI3MqM
+            // https://youtu.be/CdZN8PI3MqM
+
+            // https://www.youtube.com/playlist?list=PL4o29bINVT4EG_y-k5jGoOu3-Am8Nvi10
+            // https://music.youtube.com/playlist?list=PL4o29bINVT4EG_y-k5jGoOu3-Am8Nvi10
+            // https://youtube.com/playlist?list=PL4o29bINVT4EG_y-k5jGoOu3-Am8Nvi10
+            // https://music.youtube.com/playlist?list=PL4o29bINVT4EG_y-k5jGoOu3-Am8Nvi10
+            if (query.match(/^(https?:\/\/)?((music|www)\.)?youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/) || query.match(/^(https?:\/\/)?((music|www)\.)?youtu\.be\/([a-zA-Z0-9_-]{11})/)) {
                 videoId = [ytdl.getVideoID(query)];
                 createSelectMenu(interaction, videoId);
+            }
+            else if (query.match(/^(https?:\/\/)?((music|www)\.)?youtube\.com\/playlist\?list=([a-zA-Z0-9_-]{34})/)) {
+                let playListId = query.match(/list=([a-zA-Z0-9_-]{34})/)[1];
+                let playList = await ytpl(playListId);
+                // add to queue
+                let queue = client.queue.get(interaction.guild.id);
+                if (!queue) {
+                    queue = [];
+                }
+                playList.items.forEach(item => {
+                    queue.push({ videoId: item.id, messageChannel: interaction.channelId });
+                    videoCache[item.id] = { title: item.title, channelTitle: item.author.name };
+                });
+                client.queue.set(interaction.guild.id, queue);
+                if (client.connections.get(interaction.guild.id)) {
+                    return interaction.editReply({
+                        embeds: [
+                            new EmbedBuilder()
+                                .setTitle(`${interaction.member.user.username} added to queue.\nキューに追加されました。`)
+                                .setImage(`https://img.youtube.com/vi/${playList.items[0].id}/default.jpg`)
+                                .setColor(baseColor)
+                        ],
+                        ephemeral: true
+                    });
+                }
+                const voiceChannel = interaction.member.voice.channel;
+                // join voice channel
+                const connection = joinVoiceChannel({
+                    channelId: voiceChannel.id,
+                    guildId: voiceChannel.guild.id,
+                    adapterCreator: voiceChannel.guild.voiceAdapterCreator,
+                    selfDeaf: true,
+                    selfMute: false
+                });
+                client.connections.set(interaction.guild.id, connection);
+                interaction.editReply({
+                    content: '再生を開始します。\nNow playing.',
+                    ephemeral: true
+                });
+                startMusic(interaction.guild.id);
             }
             else if (searchCache[query]) {
                 videoId = searchCache[query];
@@ -222,6 +271,48 @@ client.on('interactionCreate', async (interaction) => {
                 .addOptions(...options);
             const row = new ActionRowBuilder().addComponents(selectMenu);
             await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
+        }
+        else if (commandName === 'queue') {
+            const queue = client.queue.get(interaction.guild.id);
+            if (!queue) {
+                return await interaction.reply({
+                    content: 'No music in the queue.\nキューに音楽がありません。',
+                    ephemeral: true
+                });
+            }
+            let embed = new EmbedBuilder()
+                .setTitle('Music queue\n音楽のキュー')
+                .setDescription('List of songs in the queue.\nキューに入っている曲のリストです。')
+                .setColor(baseColor);
+            let size = queue.length > 10 ? 10 : queue.length;
+            for (let i = 0; i < size; i++) {
+                embed.addFields({ name: `No.${i + 1}`, value: `[${videoCache[queue[i].videoId].title}](https://www.youtube.com/watch?v=${queue[i].videoId})\nby ${videoCache[queue[i].videoId].channelTitle}` });
+            }
+            await interaction.reply({ embeds: [embed], ephemeral: true });
+        }
+        else if (commandName === 'pause') {
+            const connection = client.connections.get(interaction.guild.id);
+            if (!connection) {
+                return await interaction.reply({
+                    content: 'No music is playing.\n音楽が再生されていません。',
+                    ephemeral: true
+                });
+            }
+            const player = connection.state.subscription.player;
+            player.pause();
+            await interaction.reply('Paused the music.\n音楽を一時停止しました。');
+        }
+        else if (commandName === 'resume') {
+            const connection = client.connections.get(interaction.guild.id);
+            if (!connection) {
+                return await interaction.reply({
+                    content: 'No music is playing.\n音楽が再生されていません。',
+                    ephemeral: true
+                });
+            }
+            const player = connection.state.subscription.player;
+            player.unpause();
+            await interaction.reply('Resumed the music.\n音楽を再開しました。');
         }
     }
     else if (interaction.isStringSelectMenu()) {
@@ -363,8 +454,8 @@ async function startMusic(guildId) {
         .setColor([233, 30, 99]);
 
     if (videoCache[videoId]) {
-        // https://www.uta-net.com/search/?Keyword=
-        let kashiURL = encodeURI(`https://www.uta-net.com/search/?Keyword=${videoCache[videoId].title}`);
+        // https://www.google.com/search?q=+site:www.uta-net.com URLエンコード
+        let kashiURL = encodeURI(`https://www.google.com/search?q=${videoCache[videoId].title}+site:www.uta-net.com`);
         embed.setTitle(videoCache[videoId].title);
         embed.setDescription('再生を開始します。\nNow playing.' + '\n' + videoCache[videoId].channelTitle);
         embed.setAuthor({ name: '歌詞 Lyrics', url: kashiURL });
@@ -386,8 +477,8 @@ async function startMusic(guildId) {
                 });
             }
             else {
-                // https://www.uta-net.com/search/?Keyword= URLエンコード
-                let kashiURL = encodeURI(`https://www.uta-net.com/search/?Keyword=${result.items[0].snippet.title}`);
+                // https://www.google.com/search?q=+site:www.uta-net.com URLエンコード
+                let kashiURL = encodeURI(`https://www.google.com/search?q=${result.items[0].snippet.title}+site:www.uta-net.com`);
                 embed.setTitle(result.items[0].snippet.title);
                 embed.setDescription('再生を開始します。\nNow playing.' + '\n' + result.items[0].snippet.channelTitle);
                 embed.setAuthor({ name: '歌詞 Lyrics', url: kashiURL });

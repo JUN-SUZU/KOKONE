@@ -15,6 +15,7 @@ const ytdl = require('ytdl-core');
 const fs = require('fs');
 const path = require('path');
 const cron = require('node-cron');
+const wait = require('node:timers/promises').setTimeout;
 const baseColor = '#ff207d';
 
 const client = new Client({
@@ -519,7 +520,9 @@ async function playMusic(connection, videoId, guildId) {
     player.play(resource);
     connection.subscribe(player);
     await entersState(player, AudioPlayerStatus.Playing, 10 * 1000);
-    await entersState(player, AudioPlayerStatus.Idle, 24 * 60 * 60 * 1000);
+    await entersState(player, AudioPlayerStatus.Idle, 24 * 60 * 60 * 1000); 
+    // wait for 5 seconds
+    await wait(5000);
     player.stop();
     let queue = client.queue.get(connection.joinConfig.guildId);
     queue.shift();

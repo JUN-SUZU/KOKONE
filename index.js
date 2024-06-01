@@ -110,7 +110,7 @@ client.on('interactionCreate', async (interaction) => {
                     queue = [];
                 }
                 playList.items.forEach(item => {
-                    queue.push({ videoId: item.id, messageChannel: interaction.channelId });
+                    queue.push({ videoId: item.id, messageChannel: interaction.channelId, user: interaction.member.user.username });
                     videoCache[item.id] = { title: item.title, channelTitle: item.author.name };
                 });
                 client.queue.set(interaction.guild.id, queue);
@@ -227,6 +227,7 @@ client.on('interactionCreate', async (interaction) => {
                 });
             }
             const playingMusic = queue[0];
+            playingMusic.user = interaction.member.user.username;
             for (let i = 0; i < repeatTimes; i++) {
                 queue.unshift(playingMusic);
             }
@@ -235,14 +236,16 @@ client.on('interactionCreate', async (interaction) => {
         }
         else if (commandName === 'volume') {
             const volume = interaction.options.getNumber('volume');
-            if (volume <= 0 || volume > 200) {
+            if ((volume <= 0 || volume > 200) && interaction.guild.id != "977760171168251945") {
                 return await interaction.reply({
                     content: '音量は0より大きく200以下である必要があります。\nVolume must be greater than 0 and less than or equal to 100.',
                     ephemeral: true
                 });
             }
+            let resource = client.connections.get(interaction.guild.id).state.subscription.player.state.resource;
+            resource.volume.setVolume(volume / 100);
             client.volume.set(interaction.guild.id, volume);
-            await interaction.reply(`Volume set to ${volume}%.\n音量を${volume}%に設定しました。\n次の曲から適用されます。`);
+            await interaction.reply(`Volume set to ${volume}%.\n音量を${volume}%に設定しました。`);
         }
         else if (commandName === 'history') {
             const histry = client.histry.get(interaction.guild.id);
@@ -331,7 +334,7 @@ client.on('interactionCreate', async (interaction) => {
             await interaction.deferReply({ ephemeral: true });
             // add to queue
             const queue = client.queue.get(interaction.guild.id);
-            const queueData = { videoId: videoId, messageChannel: interaction.channelId };
+            const queueData = { videoId: videoId, messageChannel: interaction.channelId, user: interaction.member.user.username };
             if (queue) {
                 queue.push(queueData);
                 client.queue.set(interaction.guild.id, queue);
@@ -394,7 +397,7 @@ function createSelectMenu(interaction, videoId) {
     else if (videoId.length == 1) {
         // add to queue
         const queue = client.queue.get(interaction.guild.id);
-        const queueData = { videoId: videoId[0], messageChannel: interaction.channelId };
+        const queueData = { videoId: videoId[0], messageChannel: interaction.channelId, user: interaction.member.user.username };
         if (queue) {
             queue.push(queueData);
             client.queue.set(interaction.guild.id, queue);
@@ -458,7 +461,7 @@ async function startMusic(guildId) {
         // https://www.google.com/search?q=+site:www.uta-net.com URLエンコード
         let kashiURL = encodeURI(`https://www.google.com/search?q=${videoCache[videoId].title}+site:www.uta-net.com`);
         embed.setTitle(videoCache[videoId].title);
-        embed.setDescription('再生を開始します。\nNow playing.' + '\n' + videoCache[videoId].channelTitle);
+        embed.setDescription(`再生を開始します。Now playing.\n${videoCache[videoId].channelTitle}\nadded by ${queue[0].user}`);
         embed.setAuthor({ name: '歌詞 Lyrics', url: kashiURL });
         channel.send({ embeds: [embed] });
         playMusic(connection, videoId, guildId);
@@ -481,7 +484,7 @@ async function startMusic(guildId) {
                 // https://www.google.com/search?q=+site:www.uta-net.com URLエンコード
                 let kashiURL = encodeURI(`https://www.google.com/search?q=${result.items[0].snippet.title}+site:www.uta-net.com`);
                 embed.setTitle(result.items[0].snippet.title);
-                embed.setDescription('再生を開始します。\nNow playing.' + '\n' + result.items[0].snippet.channelTitle);
+                embed.setDescription(`再生を開始します。Now playing.\n${result.items[0].snippet.channelTitle}\nadded by ${queue[0].user}`);
                 embed.setAuthor({ name: '歌詞 Lyrics', url: kashiURL });
                 channel.send({ embeds: [embed] });
                 videoCache[videoId] = { title: result.items[0].snippet.title, channelTitle: result.items[0].snippet.channelTitle };
@@ -520,7 +523,7 @@ async function playMusic(connection, videoId, guildId) {
     player.play(resource);
     connection.subscribe(player);
     await entersState(player, AudioPlayerStatus.Playing, 10 * 1000);
-    await entersState(player, AudioPlayerStatus.Idle, 24 * 60 * 60 * 1000); 
+    await entersState(player, AudioPlayerStatus.Idle, 24 * 60 * 60 * 1000);
     // wait for 5 seconds
     await wait(5000);
     player.stop();

@@ -33,7 +33,7 @@ const client = new Client({
 client.queue = new Collection();
 client.connections = new Collection();
 client.volume = new Collection();
-client.histry = new Collection();
+client.history = new Collection();
 let searchCache = JSON.parse(fs.readFileSync('./searchCache.json', 'utf8'));
 let videoCache = JSON.parse(fs.readFileSync('./videoCache.json', 'utf8'));
 
@@ -236,7 +236,7 @@ client.on('interactionCreate', async (interaction) => {
         }
         else if (commandName === 'volume') {
             const volume = interaction.options.getNumber('volume');
-            if ((volume <= 0 || volume > 200) && interaction.guild.id != "977760171168251945") {
+            if (volume < 0 || volume >= 200) {
                 return await interaction.reply({
                     content: '音量は0より大きく200以下である必要があります。\nVolume must be greater than 0 and less than or equal to 100.',
                     ephemeral: true
@@ -248,8 +248,8 @@ client.on('interactionCreate', async (interaction) => {
             await interaction.reply(`Volume set to ${volume}%.\n音量を${volume}%に設定しました。`);
         }
         else if (commandName === 'history') {
-            const histry = client.histry.get(interaction.guild.id);
-            if (!histry) {
+            const history = client.history.get(interaction.guild.id);
+            if (!history) {
                 return await interaction.reply({
                     content: 'No music history.\n音楽の履歴がありません。',
                     ephemeral: true
@@ -260,13 +260,13 @@ client.on('interactionCreate', async (interaction) => {
                 .setDescription('List of the last 10 songs played.\n最後10回に再生された曲のリストです。\n' +
                     'Please press the button to play the song.\n曲を再生するにはボタンを押してください。')
                 .setColor(baseColor);
-            for (let i = 0; i < histry.length; i++) {
-                embed.addFields({ name: `No.${i + 1}`, value: `[${videoCache[histry[i]].title}](https://www.youtube.com/watch?v=${histry[i]})\nby ${videoCache[histry[i]].channelTitle}` });
+            for (let i = 0; i < history.length; i++) {
+                embed.addFields({ name: `No.${i + 1}`, value: `[${videoCache[history[i]].title}](https://www.youtube.com/watch?v=${history[i]})\nby ${videoCache[history[i]].channelTitle}` });
             }
             // add button
             const options = [];
-            for (let i = 0; i < histry.length; i++) {
-                options.push({ label: `No.${i + 1}`, value: histry[i] });
+            for (let i = 0; i < history.length; i++) {
+                options.push({ label: `No.${i + 1}`, value: history[i] });
             }
             const selectMenu = new StringSelectMenuBuilder()
                 .setCustomId('musicSelect')
@@ -498,17 +498,17 @@ async function startMusic(guildId) {
 async function playMusic(connection, videoId, guildId) {
     fs.writeFileSync('./searchCache.json', JSON.stringify(searchCache, null, 4), 'utf8');
     fs.writeFileSync('./videoCache.json', JSON.stringify(videoCache, null, 4), 'utf8');
-    let histry = client.histry.get(guildId);
-    if (!histry) {
-        histry = [];
+    let history = client.history.get(guildId);
+    if (!history) {
+        history = [];
     }
-    if (histry.length > 10) {
-        histry.shift();
+    if (history.length > 10) {
+        history.shift();
     }
-    if (!histry.includes(videoId)) {
-        histry.push(videoId);
+    if (!history.includes(videoId)) {
+        history.push(videoId);
     }
-    client.histry.set(guildId, histry);
+    client.history.set(guildId, history);
     const stream = ytdl(`https://www.youtube.com/watch?v=${videoId}`, {
         filter: format => format.audioCodec === 'opus' && format.container === 'webm', //webm opus
         quality: 'highest',

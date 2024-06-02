@@ -236,7 +236,7 @@ client.on('interactionCreate', async (interaction) => {
         }
         else if (commandName === 'volume') {
             const volume = interaction.options.getNumber('volume');
-            if (volume < 0 || volume >= 200) {
+            if (volume <= 0 || volume > 200) {
                 return await interaction.reply({
                     content: '音量は0より大きく200以下である必要があります。\nVolume must be greater than 0 and less than or equal to 100.',
                     ephemeral: true

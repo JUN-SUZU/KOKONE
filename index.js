@@ -1,7 +1,7 @@
 const config = require('./config.json');
 // discord.js
 const { ActionRowBuilder, ActivityType, Client, Collection,
-    EmbedBuilder, Events, GatewayIntentBits, StringSelectMenuBuilder } = require('discord.js');
+    EmbedBuilder, Events, GatewayIntentBits, PermissionsBitField, StringSelectMenuBuilder } = require('discord.js');
 const { entersState, AudioPlayerStatus, createAudioPlayer, createAudioResource, joinVoiceChannel, StreamType } = require('@discordjs/voice');
 // search on youtube
 const youtubeNode = require('youtube-node');
@@ -72,7 +72,12 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.isChatInputCommand()) {
         const commandName = interaction.commandName;
         // get permission of the text channel
-        if (!interaction.channel.permissionsFor(interaction.guild.me).has('SEND_MESSAGES')) {
+        const permissions = interaction.channel.permissionsFor(client.user);
+        if (!permissions ||
+            !permissions.has(PermissionsBitField.Flags.SendMessages) ||
+            !permissions.has(PermissionsBitField.Flags.ViewChannel) ||
+            !permissions.has(PermissionsBitField.Flags.EmbedLinks) ||
+            !permissions.has(PermissionsBitField.Flags.AttachFiles)) {
             return await interaction.reply({
                 content: 'I don\'t have permission to send messages in this channel.\nこのチャンネルでメッセージを送信する権限がありません。',
                 ephemeral: true
@@ -84,6 +89,14 @@ client.on('interactionCreate', async (interaction) => {
             if (!voiceChannel) {
                 return await interaction.reply({
                     content: 'You need to be in a voice channel to play music!\nあなたは音声チャンネルに参加している必要があります。',
+                    ephemeral: true
+                });
+            }
+            if (!voiceChannel.permissionsFor(client.user).has(PermissionsBitField.Flags.Connect) ||
+                !voiceChannel.permissionsFor(client.user).has(PermissionsBitField.Flags.Speak) ||
+                !voiceChannel.permissionsFor(client.user).has(PermissionsBitField.Flags.ViewChannel)) {
+                return await interaction.reply({
+                    content: 'I don\'t have permission to join or speak in this channel.\nこのチャンネルに参加または発言する権限がありません。',
                     ephemeral: true
                 });
             }
@@ -334,6 +347,14 @@ client.on('interactionCreate', async (interaction) => {
             if (!voiceChannel) {
                 return await interaction.reply({
                     content: 'You need to be in a voice channel to play music!\nあなたは音声チャンネルに参加している必要があります。',
+                    ephemeral: true
+                });
+            }
+            if (!voiceChannel.permissionsFor(client.user).has(PermissionsBitField.Flags.Connect) ||
+                !voiceChannel.permissionsFor(client.user).has(PermissionsBitField.Flags.Speak) ||
+                !voiceChannel.permissionsFor(client.user).has(PermissionsBitField.Flags.ViewChannel)) {
+                return await interaction.reply({
+                    content: 'I don\'t have permission to join or speak in this channel.\nこのチャンネルに参加または発言する権限がありません。',
                     ephemeral: true
                 });
             }

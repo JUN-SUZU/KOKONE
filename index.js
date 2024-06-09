@@ -71,6 +71,13 @@ client.on('messageCreate', async (message) => {
 client.on('interactionCreate', async (interaction) => {
     if (interaction.isChatInputCommand()) {
         const commandName = interaction.commandName;
+        // get permission of the text channel
+        if (!interaction.channel.permissionsFor(interaction.guild.me).has('SEND_MESSAGES')) {
+            return await interaction.reply({
+                content: 'I don\'t have permission to send messages in this channel.\nこのチャンネルでメッセージを送信する権限がありません。',
+                ephemeral: true
+            });
+        }
         if (commandName === 'play') {
             // get voice channel
             const voiceChannel = interaction.member.voice.channel;

@@ -68,8 +68,14 @@ client.on('messageCreate', async (message) => {
 });
 
 client.on('interactionCreate', async (interaction) => {
+    let log = `Interaction: ${interaction.user.tag} in #${interaction.channel.name} (${interaction.channel.id}) triggered an interaction.\n`
+        + `TimeStamp: ${new Date().toLocaleString()}\n`
+        + `Guild: ${interaction.guild.name} (${interaction.guild.id})\n`;
     if (interaction.isChatInputCommand()) {
         const commandName = interaction.commandName;
+        log += `Command: ${commandName}\n`
+            + `Options: ${interaction.options.data.map(option => `${option.name}: ${option.value}`).join(', ')}\n`;
+        fs.appendFileSync('./log.txt', log, 'utf8');
         // get permission of the text channel
         const permissions = interaction.channel.permissionsFor(client.user);
         if (!permissions ||
@@ -213,6 +219,7 @@ client.on('interactionCreate', async (interaction) => {
         else if (commandName === 'stop') {
             const connection = getVoiceConnection(interaction.guild.id);
             if (connection) {
+                client.queue.delete(interaction.guild.id);
                 connection.destroy();
             }
             const queue = client.queue.get(interaction.guild.id);
@@ -349,6 +356,9 @@ client.on('interactionCreate', async (interaction) => {
     }
     else if (interaction.isStringSelectMenu()) {
         const selectId = interaction.customId;
+        log += `SelectMenu: ${selectId}\n`
+            + `Values: ${interaction.values}\n`;
+        fs.appendFileSync('./log.txt', log, 'utf8');
         if (selectId === 'musicSelect') {
             await interaction.deferReply({ ephemeral: true });
             // get voice channel
@@ -482,6 +492,7 @@ async function startMusic(guildId) {
     const queue = client.queue.get(guildId);
     const connection = getVoiceConnection(guildId);
     if (!queue.length) {
+        client.queue.delete(guildId);
         connection.destroy();
         return;
     }
@@ -584,6 +595,7 @@ async function playMusic(connection, videoId, guildId) {
         }
         else {
             console.log(error);
+            client.queue.delete(guildId);
             connection.destroy();
             return;
         }
@@ -593,11 +605,12 @@ async function playMusic(connection, videoId, guildId) {
     player.stop();
     let queue = client.queue.get(guildId);
     queue.shift();
-    client.queue.set(guildId, queue);
     if (queue.length > 0) {
+        client.queue.set(guildId, queue);
         startMusic(guildId);
     }
     else {
+        client.queue.delete(guildId);
         connection.destroy();
     }
 }

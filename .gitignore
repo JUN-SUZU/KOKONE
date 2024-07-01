@@ -3,3 +3,4 @@ config.json
 staticInfo.json
 searchCache.json
 videoCache.json
+log.txt

@@ -10,11 +10,12 @@ youtube.setKey(config.youtubeApiKey);
 youtube.addParam('type', 'video');
 const ytpl = require('ytpl');
 // download from youtube
-const ytdl = require('ytdl-core');
+const ytdl = require('@distube/ytdl-core');
 // other modules
 const fs = require('fs');
 const path = require('path');
 const cron = require('node-cron');
+const { on } = require('events');
 const wait = require('node:timers/promises').setTimeout;
 const baseColor = '#ff207d';
 
@@ -331,7 +332,7 @@ client.on('interactionCreate', async (interaction) => {
         }
         else if (commandName === 'pause') {
             const connection = getVoiceConnection(interaction.guild.id);
-            if (!connection) {
+            if (!onPlaying(interaction.guild.id)) {
                 return await interaction.reply({
                     content: 'No music is playing.\n音楽が再生されていません。',
                     ephemeral: true
@@ -343,7 +344,7 @@ client.on('interactionCreate', async (interaction) => {
         }
         else if (commandName === 'resume') {
             const connection = getVoiceConnection(interaction.guild.id);
-            if (!connection) {
+            if (!onPlaying(interaction.guild.id)) {
                 return await interaction.reply({
                     content: 'No music is playing.\n音楽が再生されていません。',
                     ephemeral: true
@@ -507,7 +508,7 @@ async function startMusic(guildId) {
 
     if (videoCache[videoId]) {
         // https://www.google.com/search?q=+site:www.uta-net.com URLエンコード
-        let kashiURL = encodeURI(`https://www.google.com/search?q=${videoCache[videoId].title}+site:www.uta-net.com`);
+        let kashiURL = encodeURI(`https://www.google.com/search?q=${videoCache[videoId].title}+Lyrics`);
         embed.setTitle(videoCache[videoId].title);
         embed.setDescription(`再生を開始します。Now playing.\n${videoCache[videoId].channelTitle}\nadded by ${queue[0].user}`);
         embed.setAuthor({ name: '歌詞 Lyrics', url: kashiURL });
@@ -530,7 +531,7 @@ async function startMusic(guildId) {
             }
             else {
                 // https://www.google.com/search?q=+site:www.uta-net.com URLエンコード
-                let kashiURL = encodeURI(`https://www.google.com/search?q=${result.items[0].snippet.title}+site:www.uta-net.com`);
+                let kashiURL = encodeURI(`https://www.google.com/search?q=${result.items[0].snippet.title}+Lyrics`);
                 embed.setTitle(result.items[0].snippet.title);
                 embed.setDescription(`再生を開始します。Now playing.\n${result.items[0].snippet.channelTitle}\nadded by ${queue[0].user}`);
                 embed.setAuthor({ name: '歌詞 Lyrics', url: kashiURL });
@@ -615,6 +616,21 @@ async function playMusic(connection, videoId, guildId) {
     }
 }
 
+function onPlaying(guildId) {
+    try {
+        const connection = getVoiceConnection(guildId);
+        if (connection && connection.state.subscription && connection.state.subscription.player) {
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+    catch (error) {
+        return false;
+    }
+}
+
 // ボイスチャンネルからキックされた時
 client.on('voiceStateUpdate', async (oldState, newState) => {
     if (newState.channelId !== null) {
@@ -624,11 +640,9 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
         const queue = client.queue.get(oldState.guild.id);
         if (queue) {
             client.queue.delete(oldState.guild.id);
-            const subscription = getVoiceConnection(oldState.guild.id)
-            if (!subscription || !subscription.state.subscription.player) {
-                return;
+            if (onPlaying(oldState.guild.id)) {
+                getVoiceConnection(oldState.guild.id).state.subscription.player.stop();
             }
-            subscription.state.subscription.player.stop();
             getVoiceConnection(oldState.guild.id).destroy();
         }
     }

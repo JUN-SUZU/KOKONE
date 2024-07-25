@@ -1,0 +1,20 @@
+node:events:496
+      throw er; // Unhandled 'error' event
+      ^
+
+TypeError: Cannot read properties of undefined (reading 'player')
+    at Client.<anonymous> (/home/jun/projects/KOKONE/index.js:628:67)
+    at Client.emit (node:events:518:28)
+    at VoiceStateUpdate.handle (/home/jun/projects/KOKONE/node_modules/discord.js/src/client/actions/VoiceStateUpdate.js:38:14)
+    at module.exports [as VOICE_STATE_UPDATE] (/home/jun/projects/KOKONE/node_modules/discord.js/src/client/websocket/handlers/VOICE_STATE_UPDATE.js:4:35)
+    at WebSocketManager.handlePacket (/home/jun/projects/KOKONE/node_modules/discord.js/src/client/websocket/WebSocketManager.js:355:31)
+    at WebSocketManager.<anonymous> (/home/jun/projects/KOKONE/node_modules/discord.js/src/client/websocket/WebSocketManager.js:239:12)
+    at WebSocketManager.emit (/home/jun/projects/KOKONE/node_modules/@vladfrangu/async_event_emitter/dist/index.cjs:282:31)
+    at WebSocketShard.<anonymous> (/home/jun/projects/KOKONE/node_modules/@discordjs/ws/dist/index.js:1190:51)
+    at WebSocketShard.emit (/home/jun/projects/KOKONE/node_modules/@vladfrangu/async_event_emitter/dist/index.cjs:282:31)
+    at WebSocketShard.onMessage (/home/jun/projects/KOKONE/node_modules/@discordjs/ws/dist/index.js:1005:14)
+Emitted 'error' event on Client instance at:
+    at emitUnhandledRejectionOrErr (node:events:401:10)
+    at process.processTicksAndRejections (node:internal/process/task_queues:84:21)
+
+Node.js v20.12.2

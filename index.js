@@ -15,7 +15,6 @@ const ytdl = require('@distube/ytdl-core');
 const fs = require('fs');
 const path = require('path');
 const cron = require('node-cron');
-const { on } = require('events');
 const wait = require('node:timers/promises').setTimeout;
 const baseColor = '#ff207d';
 

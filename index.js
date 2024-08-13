@@ -1,16 +1,26 @@
 const config = require('./config.json');
 // discord.js
 const { ActionRowBuilder, ActivityType, Client, Collection,
-    EmbedBuilder, Events, GatewayIntentBits, PermissionsBitField, StringSelectMenuBuilder } = require('discord.js');
-const { entersState, AudioPlayerStatus, createAudioPlayer, createAudioResource, joinVoiceChannel, getVoiceConnection, StreamType } = require('@discordjs/voice');
+    EmbedBuilder, Events, GatewayIntentBits, PermissionsBitField,
+    StringSelectMenuBuilder } = require('discord.js');
+const { entersState, AudioPlayerStatus, createAudioPlayer, createAudioResource,
+    joinVoiceChannel, getVoiceConnection, StreamType } = require('@discordjs/voice');
+
 // search on youtube
 const youtubeNode = require('youtube-node');
 const youtube = new youtubeNode();
 youtube.setKey(config.youtubeApiKey);
 youtube.addParam('type', 'video');
+// deploy from youtube playlist
 const ytpl = require('ytpl');
+
 // download from youtube
 const ytdl = require('@distube/ytdl-core');
+
+// ffmpeg
+// const ffmpeg = require('fluent-ffmpeg');
+// const { PassThrough } = require('stream');
+
 // other modules
 const fs = require('fs');
 const path = require('path');
@@ -561,7 +571,7 @@ async function playMusic(connection, videoId, guildId) {
     try {
         let info = await ytdl.getInfo(videoId);
         let audioFormats = ytdl.filterFormats(info.formats, 'audioonly');
-        if (audioFormats.filter(format => format.container === 'webm' && format.audioCodec === 'opus').length == 0) {
+        if (audioFormats.filter(format => format.container === 'mp4' && format.audioCodec === 'mp4a.40.5').length == 0) {//mp4 aac
             stream = fs.createReadStream('./restricted.mp3');
         }
     } catch (error) {
@@ -570,10 +580,18 @@ async function playMusic(connection, videoId, guildId) {
     }
     if (stream == null)
         stream = ytdl(`https://www.youtube.com/watch?v=${videoId}`, {
-            filter: format => format.audioCodec === 'opus' && format.container === 'webm', //webm opus
+            filter: format => format.container === 'mp4' && format.audioCodec === 'mp4a.40.5',
             quality: 'highestaudio',
             highWaterMark: 32 * 1024 * 1024, // https://github.com/fent/node-ytdl-core/issues/902
         });
+
+    // // If the stream can't be played, use the following code
+    // const ffmpegStream = new PassThrough();
+    // ffmpeg(stream)
+    //     .audioCodec('libopus')
+    //     .format('webm')
+    //     .pipe(ffmpegStream, { end: true });
+
     const resource = createAudioResource(stream, {
         inputType: StreamType.WebmOpus,
         inlineVolume: true
@@ -600,8 +618,8 @@ async function playMusic(connection, videoId, guildId) {
             return;
         }
     }
-    // wait for 5 seconds
-    await wait(5000);
+    // wait for 3 seconds
+    await wait(3000);
     player.stop();
     let queue = client.queue.get(guildId);
     queue.shift();

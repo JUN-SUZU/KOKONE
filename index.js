@@ -363,6 +363,58 @@ client.on('interactionCreate', async (interaction) => {
             player.unpause();
             await interaction.reply('Resumed the music.\n音楽を再開しました。');
         }
+        else if (commandName === 'help') {
+            const commandDescriptions = [
+                {
+                    name: 'play',
+                    description: '指定した曲を再生します。'
+                },
+                {
+                    name: 'pause',
+                    description: '音楽の再生を一時停止します。\n再生を再開するには`/resume`を使用してください。'
+                },
+                {
+                    name: 'resume',
+                    description: '音楽の再生を再開します。'
+                },
+                {
+                    name: 'skip',
+                    description: '再生中の曲をスキップします。'
+                },
+                {
+                    name: 'stop',
+                    description: '音楽の再生を停止します。'
+                },
+                {
+                    name: 'queue',
+                    description: '再生予定の曲を表示します。'
+                },
+                {
+                    name: 'repeat',
+                    description: '再生中の曲をリピートします。'
+                },
+                {
+                    name: 'history',
+                    description: '再生履歴を表示します。'
+                },
+                {
+                    name: 'volume',
+                    description: '音量を調整します。'
+                },
+                {
+                    name: 'help',
+                    description: 'コマンドの一覧を表示します。'
+                }
+            ];
+            const embed = new EmbedBuilder()
+                .setTitle('Help\nヘルプ')
+                .setDescription('Commands that can be used with Kokone.\nKokoneで使用できるコマンドです。')
+                .addFields(commandDescriptions.map(command => {
+                    return { name: `/${command.name}`, value: command.description };
+                }))
+                .setColor(baseColor);
+            await interaction.reply({ embeds: [embed], ephemeral: true });
+        }
     }
     else if (interaction.isStringSelectMenu()) {
         const selectId = interaction.customId;

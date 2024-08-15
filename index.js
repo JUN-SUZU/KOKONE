@@ -1,10 +1,10 @@
 const config = require('./config.json');
 // discord.js
-const { ActionRowBuilder, ActivityType, Client, Collection,
+const { ActionRowBuilder, ActivityType, ChannelType, Client, Collection,
     EmbedBuilder, Events, GatewayIntentBits, PermissionsBitField,
     StringSelectMenuBuilder } = require('discord.js');
-const { entersState, AudioPlayerStatus, createAudioPlayer, createAudioResource, AudioReceiveStream,
-    joinVoiceChannel, getVoiceConnection, StreamType } = require('@discordjs/voice');
+const { entersState, AudioPlayerStatus, AudioReceiveStream, createAudioPlayer, createAudioResource, EndBehaviorType,
+    joinVoiceChannel, getVoiceConnection, NoSubscriberBehavior, StreamType } = require('@discordjs/voice');
 
 // search on youtube
 const youtubeNode = require('youtube-node');
@@ -33,7 +33,7 @@ let porcupine = new Porcupine(
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegPath = require('ffmpeg-static');
 ffmpeg.setFfmpegPath(ffmpegPath);
-const { PassThrough } = require('stream');
+const { PassThrough, Readable } = require('stream');
 
 // other modules
 const fs = require('fs');
@@ -78,6 +78,25 @@ client.on('messageCreate', async (message) => {
         registerSlashCommands(guild);
         message.reply('Command registration completed.\nコマンドの登録が完了しました。');
     }
+    else if (message.content === 'kokone show guilds') {
+        await client.guilds.fetch();
+        let guilds = client.guilds.cache.map(guild => guild.name);
+        message.reply(`\`\`\`${guilds.join('\n')}\`\`\``);
+    }
+    else if (message.content === 'kokone global notice' && message.author.id === '704668240030466088') {
+        const permissions = interaction.channel.permissionsFor(client.user);
+        client.guilds.cache.forEach(guild => {
+            let channel = guild.channels.cache.find(channel =>
+                channel.type === ChannelType.GuildText && channel.permissionsFor(client.user).has(PermissionsBitField.Flags.SendMessages));
+            if (channel) {
+                try {
+                    channel.send('This is a global notice.\nこれはグローバル通知です。\n' + message.content.slice(20));
+                } catch (error) {
+                    console.log(error);
+                }
+            }
+        });
+    }
 });
 
 function registerSlashCommands(guild) {
@@ -121,9 +140,10 @@ client.on('interactionCreate', async (interaction) => {
                     ephemeral: true
                 });
             }
-            if (!voiceChannel.permissionsFor(client.user).has(PermissionsBitField.Flags.Connect) ||
-                !voiceChannel.permissionsFor(client.user).has(PermissionsBitField.Flags.Speak) ||
-                !voiceChannel.permissionsFor(client.user).has(PermissionsBitField.Flags.ViewChannel)) {
+            const voiceChannelPermissions = voiceChannel.permissionsFor(client.user);
+            if (!voiceChannelPermissions.has(PermissionsBitField.Flags.Connect) ||
+                !voiceChannelPermissions.has(PermissionsBitField.Flags.Speak) ||
+                !voiceChannelPermissions.has(PermissionsBitField.Flags.ViewChannel)) {
                 return await interaction.reply({
                     content: 'I don\'t have permission to join or speak in this channel.\nこのチャンネルに参加または発言する権限がありません。',
                     ephemeral: true
@@ -235,13 +255,11 @@ client.on('interactionCreate', async (interaction) => {
             let repeatTimes = interaction.options.getNumber('times');
             if (repeatTimes < 1) {
                 return await interaction.reply({
-                    content: 'The number of times must be 1 or more.\n回数は1以上である必要があります。',
+                    content: 'The number of times must be at least 1.\n回数は少なくとも1回である必要があります。',
                     ephemeral: true
                 });
             }
-            if (repeatTimes > 1000) {
-                repeatTimes = 1000;
-            }
+            if (repeatTimes > 1000) repeatTimes = 1000;
             const queue = client.queue.get(interaction.guild.id);
             if (!queue) {
                 return await interaction.reply({
@@ -265,12 +283,18 @@ client.on('interactionCreate', async (interaction) => {
                     ephemeral: true
                 });
             }
+            await interaction.reply(`Volume set to ${volume}%.\n音量を${volume}%に設定しました。`);
             if (getVoiceConnection(interaction.guild.id)) {
                 const resource = getVoiceConnection(interaction.guild.id).state.subscription.player.state.resource;
-                resource.volume.setVolume(volume / 100);
+                let currentVolume = client.volume.get(interaction.guild.id) || 100;
+                while (currentVolume != volume) {
+                    let diff = volume - currentVolume > 10? 10 : volume - currentVolume < -10? -10 : volume - currentVolume;
+                    currentVolume += diff;
+                    resource.volume.setVolume(currentVolume / 100);
+                    await wait(200);
+                }
             }
             client.volume.set(interaction.guild.id, volume);
-            await interaction.reply(`Volume set to ${volume}%.\n音量を${volume}%に設定しました。`);
         }
         else if (commandName === 'history') {
             const history = client.history.get(interaction.guild.id);
@@ -487,17 +511,45 @@ function createSelectMenu(interaction, videoId) {
 }
 
 function joinAndReply(interaction) {
-    joinVoiceChannel({
+    const connection = joinVoiceChannel({
         channelId: interaction.member.voice.channel.id,
         guildId: interaction.guild.id,
         adapterCreator: interaction.guild.voiceAdapterCreator,
-        selfDeaf: true,
+        selfDeaf: false,
         selfMute: false,
         timeout: 10 * 1000
     });
     interaction.editReply({
         content: '再生を開始します。\nNow playing.',
         ephemeral: true
+    });
+    // porcupine
+    const receiver = connection.receiver;
+    receiver.speaking.on('start', async (userId) => {
+        console.log(`User ${userId} started speaking`);
+        if (!speechEnabledUsers.includes(userId)) return;
+        const writeStream = fs.createWriteStream(`chunk${userId}.pcm`);
+        const audioStream = receiver.subscribe(userId, { end: { behavior: EndBehaviorType.AfterSilence, duration: 1000 } });
+        const buffer = [];
+
+        audioStream.on('data', (chunk) => {
+            // 16-bit PCMデータをバッファに追加
+            buffer.push(...new Int16Array(chunk.buffer));
+
+            // フレームサイズが512に達したらPorcupineに渡す
+            while (buffer.length >= porcupine.frameLength) {
+                const frame = buffer.splice(0, porcupine.frameLength);
+                const keywordIndex = porcupine.process(frame);
+                if (keywordIndex >= 0) {
+                    console.log(`ウェイクワードが検出されました。User: ${userId}`);
+                    // ウェイクワードが検出された際に行う処理
+                }
+            }
+        });
+
+        audioStream.on('end', () => {
+            console.log(`User ${userId} stopped speaking`);
+        });
     });
     startMusic(interaction.guild.id);
 }

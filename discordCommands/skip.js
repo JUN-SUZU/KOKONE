@@ -3,5 +3,5 @@ const { SlashCommandBuilder } = require('discord.js');
 module.exports = {
 	data: new SlashCommandBuilder()
 		.setName('skip')
-		.setDescription('再生中の曲をスキップします。秒数を指定することでその秒数分スキップします。')
+		.setDescription('再生中の曲をスキップします。')
 };

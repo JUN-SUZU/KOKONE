@@ -74,16 +74,16 @@ client.on('messageCreate', async (message) => {
         message.reply(`\`\`\`${guilds.join('\n')}\`\`\``);
     }
     else if (message.content === 'kokone global notice' && message.author.id === '704668240030466088') {
-        const permissions = interaction.channel.permissionsFor(client.user);
+        // 全てのサーバーで通知
         client.guilds.cache.forEach(guild => {
-            let channel = guild.channels.cache.find(channel =>
-                channel.type === ChannelType.GuildText && channel.permissionsFor(client.user).has(PermissionsBitField.Flags.SendMessages));
-            if (channel) {
-                try {
-                    channel.send('This is a global notice.\nこれはグローバル通知です。\n' + message.content.slice(20));
-                } catch (error) {
-                    console.log(error);
+            try {
+                if (guild.systemChannel && guild.systemChannel.permissionsFor(client.user).has(PermissionsBitField.Flags.SendMessages)) {
+                    guild.systemChannel.send('Kokone is now available in all servers.\nKokoneが全てのサーバーで利用可能になりました。');
                 }
+            }
+            catch (error) {
+                console.log(`Error has occurred while sending global notice: ${guild.name}(ID: ${guild.id})`);
+                console.log(error);
             }
         });
     }
@@ -143,9 +143,6 @@ client.on('interactionCreate', async (interaction) => {
             // search video id
             const keyword = interaction.options.getString('keyword');
             let query = keyword.replace(/"/g, '');
-            // 開始時間指定 TODO: 未実装
-            // https://music.youtube.com/watch?v=Yo83M-KOc7k&feature=shared&t=44
-            // https://youtu.be/a1KBb9mTgck?feature=shared&t=146
             if (query.match(/^(https?:\/\/)?((music|www)\.)?youtube\.com\/watch(\/\?|\?)v=([a-zA-Z0-9_-]{11})/) ||
                 query.match(/^(https?:\/\/)?((music|www)\.)?youtu\.be\/([a-zA-Z0-9_-]{11})/) ||
                 query.match(/^(https?:\/\/)?((music|www)\.)?youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/)) {
@@ -375,6 +372,25 @@ client.on('interactionCreate', async (interaction) => {
             player.unpause();
             await interaction.reply('Resumed the music.\n音楽を再開しました。');
         }
+        else if (commandName === 'shuffle') {
+            const queue = client.queue.get(interaction.guild.id);
+            if (!queue || queue.length < 2) {
+                return await interaction.reply({
+                    content: 'There are no music in the queue or only one music.\nキューに音楽がないか、1曲しかありません。',
+                    ephemeral: true
+                });
+            }
+            const playingMusic = queue.shift();
+            let shuffledQueue = [playingMusic];
+            const queueLength = queue.length;
+            for (let i = 0; i < queueLength; i++) {
+                const randomIndex = Math.floor(Math.random() * queue.length);
+                shuffledQueue.push(queue[randomIndex]);
+                queue.splice(randomIndex, 1);
+            }
+            client.queue.set(interaction.guild.id, shuffledQueue);
+            await interaction.reply('Shuffled the queue.\nキューをシャッフルしました。');
+        }
         else if (commandName === 'help') {
             const commandDescriptions = [
                 { name: 'play', description: '指定した曲を再生します。' },
@@ -386,7 +402,7 @@ client.on('interactionCreate', async (interaction) => {
                 { name: 'repeat', description: '再生中の曲をリピートします。' },
                 { name: 'history', description: '再生履歴を表示します。' },
                 { name: 'volume', description: '音量を調整します。' },
-                { name: 'speech', description: '音声認識を有効または無効にします。' },
+                { name: 'shuffle', description: 'キューに追加された曲をシャッフルします。' },
                 { name: 'help', description: 'コマンドの一覧を表示します。' }
             ];
             const embed = new EmbedBuilder()

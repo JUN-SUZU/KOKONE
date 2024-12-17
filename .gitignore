@@ -1,6 +1,5 @@
 .vscode
 config.json
-speechEnabledUsers.json
 searchCache.json
 videoCache.json
 log.txt

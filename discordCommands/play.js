@@ -9,5 +9,5 @@ module.exports = {
                 .setName('keyword')
                 .setDescription('再生する曲のキーワードもしくはURLを入力してください。')
                 .setRequired(true)
-        ),
+        )
 };

@@ -68,17 +68,23 @@ client.on('messageCreate', async (message) => {
         registerSlashCommands(guild);
         message.reply('Command registration completed.\nコマンドの登録が完了しました。');
     }
+    else if (message.content === 'kokone recovery command all') {
+        client.guilds.cache.forEach(guild => {
+            registerSlashCommands(guild);
+        });
+        message.reply('Command registration completed in all servers.\n全てのサーバーでコマンドの登録が完了しました。');
+    }
     else if (message.content === 'kokone show guilds') {
         await client.guilds.fetch();
         let guilds = client.guilds.cache.map(guild => guild.name);
         message.reply(`\`\`\`${guilds.join('\n')}\`\`\``);
     }
-    else if (message.content === 'kokone global notice' && message.author.id === '704668240030466088') {
+    else if (message.content.startsWith('kokone global notice') && message.author.id === '704668240030466088') {
         // 全てのサーバーで通知
         client.guilds.cache.forEach(guild => {
             try {
                 if (guild.systemChannel && guild.systemChannel.permissionsFor(client.user).has(PermissionsBitField.Flags.SendMessages)) {
-                    guild.systemChannel.send('Kokone is now available in all servers.\nKokoneが全てのサーバーで利用可能になりました。');
+                    guild.systemChannel.send('This is a global notice.\nこれはグローバル通知です。' + message.content.slice(20));
                 }
             }
             catch (error) {

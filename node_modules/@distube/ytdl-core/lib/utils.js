@@ -432,6 +432,6 @@ exports.generateClientPlaybackNonce = length => {
 
 exports.applyPlayerClients = options => {
   if (!options.playerClients || options.playerClients.length === 0) {
-    options.playerClients = ["WEB_CREATOR", "IOS"];
+    options.playerClients = ["WEB", "WEB_CREATOR", "IOS"];
   }
 };

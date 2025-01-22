@@ -1,5 +1,7 @@
 .vscode
 config.json
+account.json
 searchCache.json
 videoCache.json
 log.txt
+plan.md

@@ -24,6 +24,9 @@ const ffmpegPath = require('ffmpeg-static');
 ffmpeg.setFfmpegPath(ffmpegPath);
 const { PassThrough, Readable } = require('stream');
 
+// dashboard
+const http = require('http');
+
 // other modules
 const fs = require('fs');
 const path = require('path');
@@ -51,6 +54,7 @@ client.history = new Collection();
 client.isSkip = new Collection();
 let searchCache = JSON.parse(fs.readFileSync('./searchCache.json', 'utf8'));
 let videoCache = JSON.parse(fs.readFileSync('./videoCache.json', 'utf8'));
+let accountData = JSON.parse(fs.readFileSync('./account.json', 'utf8'));
 
 client.once('ready', async () => {
     console.log(`Logged in as ${client.user.tag}`);
@@ -703,4 +707,104 @@ cron.schedule('*/10 * * * *', () => {
     client.isSkip = client.isSkip.clone();
 });
 
+
+const server = http.createServer((req, res) => {
+    function getIPAddress(req) {
+        if (req.headers['x-forwarded-for']) {
+            return req.headers['x-forwarded-for'].split(/\s*,\s*/)[0];
+        } else if (req.connection.remoteAddress) {
+            return req.connection.remoteAddress;
+        } else {
+            return req.socket.remoteAddress;
+        }
+    }
+    const url = req.url.replace(/\?.*$/, ''), method = req.method, ipadr = getIPAddress(req), now = new Date().toLocaleString();
+    fs.appendFileSync('./log.txt', `${now} ${method} ${url} ${ipadr}\n`, 'utf8');
+    if (method === 'OPTIONS') {
+        res.writeHead(200, {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'POST',
+            'Access-Control-Allow-Headers': 'Content-Type',
+            'Content-Type': 'application/json'
+        });
+        res.end();
+        return;
+    }
+    if (method != 'POST') return;
+    let body = '';
+    req.on('data', (chunk) => {
+        body += chunk;
+    });
+    req.on('end', () => {
+        try {
+            const data = JSON.parse(body);
+            if (url === '/login/api/') {
+
+                async function getDiscordToken(code) {
+                    const data = {
+                        client_id: config.clientID,
+                        client_secret: config.clientSecret,
+                        grant_type: 'authorization_code',
+                        code: code,
+                        redirect_uri: config.url + '/login/',
+                        scope: 'identify email'
+                    };
+                    const options = {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: new URLSearchParams(data),
+                    };
+                    const response = await fetch('https://discord.com/api/oauth2/token', options);
+                    const json = await response.json();
+                    return json.access_token;
+                }
+
+                async function getUserData(token) {
+                    const options = {
+                        headers: {
+                            Authorization: `Bearer ${token}`
+                        }
+                    };
+                    const response = await fetch('https://discord.com/api/users/@me', options);
+                    return await response.json();
+                }
+
+                getDiscordToken(data.code).then((token) => {
+                    getUserData(token).then((user) => {
+                        if (!user.id) {
+                            res.writeHead(403, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ result: 'fail' }));
+                            return;
+                        }
+                        let kokoneToken = Math.random().toString(36).slice(-8);
+                        if (!accountData[user.id]) {
+                            accountData[user.id] = {
+                                username: user.username,
+                                globalName: user["global_name"],
+                                avatar: `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`,
+                                verified: user.verified,
+                                token: kokoneToken
+                            };
+                        }
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ result: 'success', userID: user.id, token: kokoneToken }));
+                    });
+                }).catch((e) => {
+                    res.writeHead(403, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ result: 'fail' }));
+                });
+            }
+        } catch (error) {
+            // return no error or message
+            console.log('Bad request received.', ipadr);
+            return;
+        }
+    });
+});
+
 client.login(config.token);
+server.listen(config.httpPort, () => {
+    console.log(`Server running at https://dashboard.kokone.jun-suzu.net/ with port ${config.httpPort} (HTTP transfered by NGINX).`);
+});

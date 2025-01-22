@@ -1,0 +1,215 @@
+$background-color: #2b2b2b;
+$color: #ff207d;
+@font-face {
+    font-family: "BizinGothicDiscord";
+    src: url("/assets/fonts/BizinGothicDiscord-Regular.ttf") format("truetype");
+}
+body {
+    color: white;
+    background-color: $background-color;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    header {
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+        padding: 0.25rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background-color: darken($color: $background-color, $amount: 5%);
+        .menu__button__header {
+            width: 3rem;
+            height: 3rem;
+            border-radius: 1.5rem;
+            border: #444 solid 1px;
+            background-color: black;
+            transition:
+                background-color 0.3s,
+                border 0.6s;
+            img {
+                width: 2rem;
+                height: 2rem;
+                border-radius: 1rem;
+            }
+            &:hover {
+                cursor: pointer;
+            }
+            &:active {
+                background-color: gray;
+                border: gray solid 2px;
+            }
+        }
+        .logo__link__header {
+            margin-left: 1rem;
+            margin-right: auto;
+            width: 12rem;
+            a.logo {
+                color: $color;
+                font-family: Arial, Helvetica, sans-serif;
+                font-weight: bold;
+            }
+            @media screen and (max-width: 768px) {
+                display: none;
+            }
+        }
+        .popup__buttons__header {
+            margin-left: auto;
+            margin-right: 1rem;
+            display: flex;
+            align-items: center;
+            .popup__button__header {
+                padding: 0.75rem 1.25rem;
+                margin: 1px;
+                margin-inline: 0.25rem;
+                color: white;
+                font-size: 1rem;
+                font-family: "BizinGothicDiscord", sans-serif;
+                border: #444 solid 1px;
+                background-color: #45474a;
+                transition:
+                    background-color 0.3s,
+                    border 0.6s;
+                img {
+                    width: 2rem;
+                    height: 2rem;
+                }
+                &:hover {
+                    cursor: pointer;
+                    border: rgb(128, 128, 187) solid 1px;
+                }
+                &:active {
+                    background-color: gray;
+                    border: gray solid 1px;
+                }
+            }
+            @media screen and (max-width: 768px) {
+                display: none;
+            }
+        }
+        .account__menu__header {
+            display: flex;
+            align-items: center;
+            img {
+                width: 3rem;
+                height: 3rem;
+                border-radius: 1.5rem;
+                margin-right: 1rem;
+                padding: 0.5rem;
+                background-color: gray;
+            }
+            .account__name__header {
+                margin-right: 1rem;
+                font-family: "BizinGothicDiscord", sans-serif;
+                font-size: 1rem;
+                @media screen and (max-width: 768px) {
+                    display: none;
+                }
+            }
+        }
+    }
+    main {
+        flex-grow: 1;
+        display: flex;
+        height: calc(100vh - 60px);
+        nav {
+            display: flex;
+            width: 19.5rem;
+            height: calc(100vh - 60px);
+            .servers__list__leftedge {
+                width: 72px;
+                height: calc(100vh - 60px);
+                background-color: #1e1f22;
+                border-right: #141517 solid 1px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                .server__icon {
+                    margin: 0.5rem auto;
+                    width: 3rem;
+                    height: 3rem;
+                    border-radius: 1.5rem;
+                    transition: border-radius 0.3s;
+                    background-color: gray;
+                    &:hover {
+                        cursor: pointer;
+                        border-radius: 1rem;
+                        img {
+                            border-radius: 1rem;
+                        }
+                    }
+                    img {
+                        width: 3rem;
+                        height: 3rem;
+                        border-radius: 1.5rem;
+                        padding: 0.25rem;
+                    }
+                }
+                .verticalline__separator__middle__menu {
+                    width: 60%;
+                    height: 4px;
+                    border-radius: 2px;
+                    margin: 0.5rem auto;
+                    background-color: lighten($color: #1e1f22, $amount: 20%);
+                }
+            }
+            .tabs__list__leftedge {
+                width: 15rem;
+                height: calc(100vh - 60px);
+                background-color: #2b2d31;
+                .servername__label__top {
+                    font-family: "BizinGothicDiscord", sans-serif;
+                    font-size: 1rem;
+                    color: white;
+                    margin: 1rem;
+                }
+                .verticalline__separator__middle__options {
+                    width: 100%;
+                    height: 2px;
+                    margin: 0.5rem auto;
+                    background-color: darken($color: #2b2d31, $amount: 20%);
+                }
+                .tabs__list__bottom {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    .me__tabs__list {
+                        display: block;
+                    }
+                    .server__tabs__list {
+                        display: none;
+                    }
+                    .tab__button {
+                        width: calc(100% - 1rem);
+                        margin: 1px 0.5rem;
+                        padding: 0.5rem;
+                        padding-left: 0.75rem;
+                        color: white;
+                        font-family: "BizinGothicDiscord", sans-serif;
+                        font-size: 1rem;
+                        text-align: left;
+                        border: #2b2d31 solid 1px;
+                        border-radius: 0.25rem;
+                        background-color: #2b2d31;
+                        transition:
+                            background-color 0.3s,
+                            border 0.6s;
+                        &:hover {
+                            cursor: pointer;
+                            background-color: #5d5f68;
+                        }
+                        &:active {
+                            background-color: #6d707b;
+                        }
+                    }
+                }
+            }
+        }
+        .main__panel__content {
+            width: calc(100vw - 312px);
+            height: calc(100vh - 60px);
+            background-color: #313338;
+        }
+    }
+}

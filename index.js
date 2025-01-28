@@ -18,6 +18,9 @@ const ytpl = require('ytpl');
 // download from youtube
 const ytdl = require('@distube/ytdl-core');
 
+const ws = require('ws');
+const axios = require('axios');
+
 // ffmpeg
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegPath = require('ffmpeg-static');
@@ -36,6 +39,68 @@ const wait = require('node:timers/promises').setTimeout;
 const baseColor = '#ff207d';
 
 
+async function restLavalink(method, endpoint, data) {
+    try {
+        const res = await axios({
+            method: method,
+            url: `http://${config.Lavalink.host}:${config.Lavalink.port}/v4${endpoint}`,
+            headers: {
+                Authorization: config.Lavalink.password
+            },
+            data: data
+        });
+        return res;
+    }
+    catch (error) {
+        console.log('Error has occurred in Lavalink.');
+        fs.appendFileSync('./formats.txt', `Error has occurred in Lavalink.\n${error}\n${JSON.stringify(error.response.data)}\n`, 'utf8');
+    }
+}
+
+const wsLavalink = new ws(`ws://${config.Lavalink.host}:${config.Lavalink.port}/v4/websocket`, {
+    headers: {
+        Authorization: config.Lavalink.password,
+        'User-Id': config.userID,
+        'Client-Name': 'KOKONE'
+    }
+});
+
+wsLavalink.on('open', () => {
+    console.log('Connected to Lavalink.');
+});
+
+let LavalinkSessionID = null;
+wsLavalink.on('message', async (data) => {
+    const payload = JSON.parse(data);
+    if (payload.op === 'ready') {
+        console.log('Lavalink is ready.');
+        LavalinkSessionID = payload.sessionId;
+    }
+    else if (payload.op === 'playerUpdate') {
+        console.log('PlayerUpdate');
+    }
+    else if (payload.op === 'event') {
+        if (payload.type === 'TrackEndEvent') {
+            const guildId = payload.guildId;
+            const queue = client.queue.get(guildId);
+            if (queue) {
+                queue.shift();
+                client.queue.set(guildId, queue);
+                startMusic(guildId);
+            }
+        }
+    }
+});
+
+wsLavalink.on('close', () => {
+    console.log('Disconnected from Lavalink.');
+});
+
+wsLavalink.on('error', (error) => {
+    console.log('Error has occurred in Lavalink.');
+    console.log(error);
+});
+
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -52,6 +117,7 @@ client.queue = new Collection();
 client.volume = new Collection();
 client.history = new Collection();
 client.isSkip = new Collection();
+client.voiceState = new Collection();
 let searchCache = JSON.parse(fs.readFileSync('./searchCache.json', 'utf8'));
 let videoCache = JSON.parse(fs.readFileSync('./videoCache.json', 'utf8'));
 let accountData = JSON.parse(fs.readFileSync('./account.json', 'utf8'));
@@ -598,73 +664,41 @@ async function playMusic(connection, videoId, guildId) {
         history.push(videoId);
     }
     client.history.set(guildId, history);
-    let stream;
-    try {
-        let info = await ytdl.getInfo(videoId);
-        let audioFormats = ytdl.filterFormats(info.formats, 'audioonly');
-        if (audioFormats.filter(format => format.container === 'mp4' && format.audioCodec === 'mp4a.40.5').length == 0) {//mp4 aac
-            stream = fs.createReadStream('./restricted.mp3');
-        }
-    } catch (error) {
-        // play restricted.mp3
-        stream = fs.createReadStream('./restricted.mp3');
-    }
-    if (stream == null) {
-        stream = ytdl(`https://www.youtube.com/watch?v=${videoId}`, {
-            filter: format => format.container === 'mp4' && format.audioCodec === 'mp4a.40.5',
-            quality: 'highestaudio',
-            highWaterMark: 32 * 1024 * 1024
-        });
-    }
-
-    // // If the stream can't be played, use the following code
-    // const ffmpegStream = new PassThrough();
-    // ffmpeg(stream)
-    //     .audioCodec('libopus')
-    //     .format('webm')
-    //     .pipe(ffmpegStream, { end: true });
-
-    const resource = createAudioResource(stream, {
-        inputType: StreamType.WebmOpus,
-        inlineVolume: true
-    });
-    resource.volume.setVolume(client.volume.get(guildId) / 100 || 0.3);
-    let player = createAudioPlayer();
-    player.play(resource);
-    connection.subscribe(player);
-    // await entersState(player, AudioPlayerStatus.Playing, 5 * 1000);// Playingになるまで最大5秒待ち、再生が始まらない場合はAborted
-    // await entersState(player, AudioPlayerStatus.Idle, 24 * 60 * 60 * 1000);// 再生開始から24時間待ち、再生が終わらない場合はAborted
-    player.on(AudioPlayerStatus.Idle, async () => {
-        try {
-            let isSkip = client.isSkip.get(guildId);
-            if (isSkip) return client.isSkip.delete(guildId);
-            let queue = client.queue.get(guildId);
-            queue.shift();
-            if (queue.length > 0) {
-                client.queue.set(guildId, queue);
-                await wait(2000);// 余韻のために2秒待つ
-                startMusic(guildId);
+    await wait(2000);
+    const trackinfo = await restLavalink('GET', `/loadtracks?identifier=ytsearch:${videoId}`);
+    const track = trackinfo.data.data[0];
+    console.log("SendPlayRequest",
+        {
+            op: 'play',
+            track: {
+                encoded: track.encoded,
+                userData: track.userData
+            },
+            position: 0,
+            endTime: track.info.length,
+            volume: client.volume.get(guildId) || 30,
+            paused: false,
+            voice: {
+                token: client.voiceState.get(guildId).token,
+                endpoint: client.voiceState.get(guildId).endpoint,
+                sessionId: client.voiceState.get(guildId).sessionId
             }
-            else {
-                client.queue.delete(guildId);
-                connection.destroy();
-            }
-        } catch (error) {
-            console.log(error);
         }
-    });
-    player.on('error', error => {
-        console.log(error);
-        if (error.message.includes('The operation was aborted')) {
-            client.queue.delete(guildId);
-            connection.destroy();
-            return;
-        }
-        else {
-            console.log(error);
-            client.queue.delete(guildId);
-            connection.destroy();
-            return;
+    );
+    const reponse = restLavalink('PATCH', `/sessions/${LavalinkSessionID}/players/${guildId}`, {
+        op: 'play',
+        track: {
+            encoded: track.encoded,
+            userData: track.userData
+        },
+        position: 0,
+        endTime: track.info.length,
+        volume: client.volume.get(guildId) || 30,
+        paused: false,
+        voice: {
+            token: client.voiceState.get(guildId).token,
+            endpoint: client.voiceState.get(guildId).endpoint,
+            sessionId: client.voiceState.get(guildId).sessionId
         }
     });
 }
@@ -685,10 +719,7 @@ function onPlaying(guildId) {
 }
 
 client.on('voiceStateUpdate', async (oldState, newState) => {
-    if (newState.channelId !== null) {
-        return;
-    }
-    else if (oldState.member.user.id === client.user.id) {
+    if (oldState.member.user.id === client.user.id && !newState.channelId) {
         const queue = client.queue.get(oldState.guild.id);
         if (queue) {
             client.queue.delete(oldState.guild.id);
@@ -698,6 +729,36 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
             getVoiceConnection(oldState.guild.id).destroy();
         }
     }
+    if (newState.channelId && !oldState.channelId) {
+        console.log(`Bot joined a voice channel in guild ${newState.guild.id}`);
+    }
+
+    // VOICE_STATE_UPDATEを取得
+    if (newState.id === client.user.id) {
+        const sessionId = newState.sessionId;
+        if (sessionId) {
+            let voiceState = client.voiceState.get(newState.guild.id) || {};
+            voiceState.sessionId = sessionId;
+            client.voiceState.set(newState.guild.id, voiceState);
+            console.log('VoiceStateUpdate', newState.guild.id, sessionId);
+        }
+    }
+    try{
+        console.log("oldSessionID", oldState.sessionId);
+    }
+    catch(error){
+        console.log("oldSessionID", "null");
+    }
+});
+client.on('raw', async (packet) => {
+    if (packet.t === 'VOICE_SERVER_UPDATE') {
+        const { token, guild_id, endpoint } = packet.d;
+        let voiceState = client.voiceState.get(guild_id) || {};
+        voiceState.token = token;
+        voiceState.endpoint = endpoint;
+        client.voiceState.set(guild_id, voiceState);
+        console.log('VoiceServerUpdate', guild_id, token, endpoint);
+    }
 });
 
 cron.schedule('*/10 * * * *', () => {
@@ -705,6 +766,7 @@ cron.schedule('*/10 * * * *', () => {
     client.volume = client.volume.clone();
     client.history = client.history.clone();
     client.isSkip = client.isSkip.clone();
+    client.voiceState = client.voiceState.clone();
 });
 
 

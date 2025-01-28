@@ -158,9 +158,7 @@ client.on('interactionCreate', async (interaction) => {
                     queue.push(queueData);
                     client.queue.set(interaction.guild.id, queue);
                 }
-                else {
-                    client.queue.set(interaction.guild.id, [queueData]);
-                }
+                else client.queue.set(interaction.guild.id, [queueData]);
                 if (getVoiceConnection(interaction.guild.id)) {
                     return interaction.editReply({
                         embeds: [
@@ -242,9 +240,7 @@ client.on('interactionCreate', async (interaction) => {
                 connection.destroy();
             }
             const queue = client.queue.get(interaction.guild.id);
-            if (queue) {
-                client.queue.delete(interaction.guild.id);
-            }
+            if (queue) client.queue.delete(interaction.guild.id);
             await interaction.reply('Stopped playing music.\n音楽の再生を停止しました。');
         }
         else if (commandName === 'skip') {
@@ -500,7 +496,7 @@ function createSelectMenu(interaction, videoId) {
     }
     else {
         interaction.editReply({
-            content: 'An error has occurred while searching.\n検索中にエラーが発生しました。\n' +
+            content: 'Sorry, no music found for the keyword.\nキーワードに一致する曲が見つかりませんでした。' +
                 'Please try again with a different keyword.\n別のキーワードで再度お試しください。',
             ephemeral: true
         });
@@ -553,7 +549,6 @@ async function startMusic(guildId) {
         //動画の情報を取得
         youtube.getById(videoId, function (error, result) {
             if (result.items.length == 0 || error) {
-                // console.log(error);
                 return channel.send({
                     embeds: [
                         new EmbedBuilder()
@@ -582,15 +577,9 @@ async function playMusic(connection, videoId, guildId) {
     fs.writeFileSync('./searchCache.json', JSON.stringify(searchCache, null, 4), 'utf8');
     fs.writeFileSync('./videoCache.json', JSON.stringify(videoCache, null, 4), 'utf8');
     let history = client.history.get(guildId);
-    if (!history) {
-        history = [];
-    }
-    if (history.length > 10) {
-        history.shift();
-    }
-    if (!history.includes(videoId)) {
-        history.push(videoId);
-    }
+    if (!history) history = [];
+    if (history.length > 10) history.shift();
+    if (!history.includes(videoId)) history.push(videoId);
     client.history.set(guildId, history);
     let stream;
     try {
@@ -603,7 +592,7 @@ async function playMusic(connection, videoId, guildId) {
         // play restricted.mp3
         stream = fs.createReadStream('./restricted.mp3');
     }
-    if (stream == null) {
+    if (!stream) {
         stream = ytdl(`https://www.youtube.com/watch?v=${videoId}`, {
             filter: format => format.container === 'mp4' && format.audioCodec === 'mp4a.40.5',
             quality: 'highestaudio',
@@ -623,8 +612,7 @@ async function playMusic(connection, videoId, guildId) {
     // await entersState(player, AudioPlayerStatus.Idle, 24 * 60 * 60 * 1000);// 再生開始から24時間待ち、再生が終わらない場合はAborted
     player.on(AudioPlayerStatus.Idle, async () => {
         try {
-            let isSkip = client.isSkip.get(guildId);
-            if (isSkip) return client.isSkip.delete(guildId);
+            if (client.isSkip.get(guildId)) return client.isSkip.delete(guildId);
             let queue = client.queue.get(guildId);
             queue.shift();
             if (queue.length > 0) {
@@ -659,12 +647,8 @@ async function playMusic(connection, videoId, guildId) {
 function onPlaying(guildId) {
     try {
         const connection = getVoiceConnection(guildId);
-        if (connection && connection.state.subscription && connection.state.subscription.player) {
-            return true;
-        }
-        else {
-            return false;
-        }
+        if (connection && connection.state.subscription && connection.state.subscription.player) return true;
+        else return false;
     }
     catch (error) {
         return false;
@@ -672,16 +656,12 @@ function onPlaying(guildId) {
 }
 
 client.on('voiceStateUpdate', async (oldState, newState) => {
-    if (newState.channelId !== null) {
-        return;
-    }
+    if (newState.channelId !== null) return;
     else if (oldState.member.user.id === client.user.id) {
         const queue = client.queue.get(oldState.guild.id);
         if (queue) {
             client.queue.delete(oldState.guild.id);
-            if (onPlaying(oldState.guild.id)) {
-                getVoiceConnection(oldState.guild.id).state.subscription.player.stop();
-            }
+            if (onPlaying(oldState.guild.id)) getVoiceConnection(oldState.guild.id).state.subscription.player.stop();
             getVoiceConnection(oldState.guild.id).destroy();
         }
     }

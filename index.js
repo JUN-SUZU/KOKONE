@@ -1,4 +1,8 @@
 const config = require('./config.json');
+// database
+const DB = require('./db.js');
+const db = new DB();
+
 // discord.js
 const { ActionRowBuilder, ActivityType, ChannelType, Client, Collection,
     EmbedBuilder, Events, GatewayIntentBits, PermissionsBitField,
@@ -43,7 +47,6 @@ const client = new Client({
 });
 
 client.queue = new Collection();
-client.volume = new Collection();
 client.history = new Collection();
 client.isSkip = new Collection();
 let searchCache = JSON.parse(fs.readFileSync('./searchCache.json', 'utf8'));
@@ -290,7 +293,8 @@ client.on('interactionCreate', async (interaction) => {
             await interaction.reply(`Volume set to ${volume}%.\n音量を${volume}%に設定しました。`);
             if (onPlaying(interaction.guild.id)) {
                 const resource = getVoiceConnection(interaction.guild.id).state.subscription.player.state.resource;
-                let currentVolume = client.volume.get(interaction.guild.id) || 30;
+                let currentVolumeRS = await db.exec(`SELECT volume FROM guilds WHERE guild_id = ${interaction.guild.id}`)
+                let currentVolume = currentVolumeRS[0]?.volume ?? 30;
                 while (currentVolume != volume) {
                     let diff = volume - currentVolume > 5 ? 5 : volume - currentVolume < -5 ? -5 : volume - currentVolume;
                     currentVolume += diff;
@@ -299,7 +303,7 @@ client.on('interactionCreate', async (interaction) => {
                     await wait(200);
                 }
             }
-            client.volume.set(interaction.guild.id, volume);
+            db.exec(`UPDATE guilds SET volume = ${volume} WHERE guild_id = ${interaction.guild.id}`);
         }
         else if (commandName === 'history') {
             const history = client.history.get(interaction.guild.id);
@@ -604,7 +608,9 @@ async function playMusic(connection, videoId, guildId) {
         inputType: StreamType.WebmOpus,
         inlineVolume: true
     });
-    resource.volume.setVolume(client.volume.get(guildId) / 100 || 0.3);
+    const volumeRS = await db.exec(`SELECT volume FROM guilds WHERE guild_id = ${guildId}`);
+    const volume = volumeRS[0]?.volume ?? 30;
+    resource.volume.setVolume(volume / 100);
     let player = createAudioPlayer();
     player.play(resource);
     connection.subscribe(player);
@@ -669,7 +675,6 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
 
 cron.schedule('*/10 * * * *', () => {
     client.queue = client.queue.clone();
-    client.volume = client.volume.clone();
     client.history = client.history.clone();
     client.isSkip = client.isSkip.clone();
 });

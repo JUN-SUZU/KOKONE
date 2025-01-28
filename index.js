@@ -18,12 +18,6 @@ const ytpl = require('ytpl');
 // download from youtube
 const ytdl = require('@distube/ytdl-core');
 
-// ffmpeg
-const ffmpeg = require('fluent-ffmpeg');
-const ffmpegPath = require('ffmpeg-static');
-ffmpeg.setFfmpegPath(ffmpegPath);
-const { PassThrough, Readable } = require('stream');
-
 // dashboard
 const http = require('http');
 
@@ -616,13 +610,6 @@ async function playMusic(connection, videoId, guildId) {
             highWaterMark: 32 * 1024 * 1024
         });
     }
-
-    // // If the stream can't be played, use the following code
-    // const ffmpegStream = new PassThrough();
-    // ffmpeg(stream)
-    //     .audioCodec('libopus')
-    //     .format('webm')
-    //     .pipe(ffmpegStream, { end: true });
 
     const resource = createAudioResource(stream, {
         inputType: StreamType.WebmOpus,

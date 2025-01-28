@@ -17,6 +17,7 @@ const ytpl = require('ytpl');
 
 // download from youtube
 const ytdl = require('@distube/ytdl-core');
+const { Manager } = require('magmastream');
 
 // ffmpeg
 const ffmpeg = require('fluent-ffmpeg');
@@ -47,6 +48,50 @@ const client = new Client({
         GatewayIntentBits.MessageContent
     ]
 });
+
+const lavalink = new Manager({
+    clientId: config.userID,
+    nodes: [{
+        host: config.Lavalink.host,
+        port: config.Lavalink.port,
+        password: config.Lavalink.password
+    }],
+    autoPlay: false,
+    send: (guildId, packet) => {
+        const guild = client.guilds.cache.get(guildId);
+        if (guild) {
+            const shard = guild.shard;
+            if (shard) {
+                shard.send(packet);
+            }
+        }
+    }
+});
+client.on('raw', (d) => lavalink.updateVoiceState(d));
+lavalink.on('nodeConnect', node => {
+    console.log(`Lavalink node ${node.options.identifier} connected.`);
+});
+lavalink.on('nodeReconnect', node => {
+    console.log(`Lavalink node ${node.options.identifier} reconnected.`);
+});
+lavalink.on('nodeDisconnect', (node, reason) => {
+    console.log(`Lavalink node ${node.options.identifier} disconnected. Reason: ${reason}`);
+});
+lavalink.on('nodeError', (node, error) => {
+    console.log(`Lavalink node ${node.options.identifier} error: ${error}`);
+});
+lavalink.on('trackStart', (player, track) => {
+    console.log(`Track ${track} started in guild ${player.guild}`);
+});
+lavalink.on('trackEnd', (player, track, reason) => {
+    console.log(`Track ${track} ended in guild ${player.guild} because of ${reason}`);
+    startMusic(player.guild);
+});
+try {
+    lavalink.connect();
+} catch (error) {
+    console.error(error);
+}
 
 client.queue = new Collection();
 client.volume = new Collection();
@@ -598,75 +643,58 @@ async function playMusic(connection, videoId, guildId) {
         history.push(videoId);
     }
     client.history.set(guildId, history);
-    let stream;
-    try {
-        let info = await ytdl.getInfo(videoId);
-        let audioFormats = ytdl.filterFormats(info.formats, 'audioonly');
-        if (audioFormats.filter(format => format.container === 'mp4' && format.audioCodec === 'mp4a.40.5').length == 0) {//mp4 aac
-            stream = fs.createReadStream('./restricted.mp3');
-        }
-    } catch (error) {
-        // play restricted.mp3
-        stream = fs.createReadStream('./restricted.mp3');
+    let player = lavalink.players.get(guildId);
+    function onEnd() {
+        let queue = client.queue.get(guildId);
+        queue.shift();
+        client.queue.set(guildId, queue);
+        startMusic(guildId);
     }
-    if (stream == null) {
-        stream = ytdl(`https://www.youtube.com/watch?v=${videoId}`, {
-            filter: format => format.container === 'mp4' && format.audioCodec === 'mp4a.40.5',
-            quality: 'highestaudio',
-            highWaterMark: 32 * 1024 * 1024
-        });
-    }
-
-    // // If the stream can't be played, use the following code
-    // const ffmpegStream = new PassThrough();
-    // ffmpeg(stream)
-    //     .audioCodec('libopus')
-    //     .format('webm')
-    //     .pipe(ffmpegStream, { end: true });
-
-    const resource = createAudioResource(stream, {
-        inputType: StreamType.WebmOpus,
-        inlineVolume: true
-    });
-    resource.volume.setVolume(client.volume.get(guildId) / 100 || 0.3);
-    let player = createAudioPlayer();
-    player.play(resource);
-    connection.subscribe(player);
-    // await entersState(player, AudioPlayerStatus.Playing, 5 * 1000);// Playingになるまで最大5秒待ち、再生が始まらない場合はAborted
-    // await entersState(player, AudioPlayerStatus.Idle, 24 * 60 * 60 * 1000);// 再生開始から24時間待ち、再生が終わらない場合はAborted
-    player.on(AudioPlayerStatus.Idle, async () => {
+    if (!player) {
         try {
-            let isSkip = client.isSkip.get(guildId);
-            if (isSkip) return client.isSkip.delete(guildId);
-            let queue = client.queue.get(guildId);
-            queue.shift();
-            if (queue.length > 0) {
-                client.queue.set(guildId, queue);
-                await wait(2000);// 余韻のために2秒待つ
-                startMusic(guildId);
-            }
-            else {
-                client.queue.delete(guildId);
-                connection.destroy();
-            }
-        } catch (error) {
-            console.log(error);
+            player = lavalink.create({
+                guild: guildId,
+                voiceChannel: connection.joinConfig.channelId,
+                textChannel: client.queue.get(guildId)[0].messageChannel,
+                volume: client.volume.get(guildId) || 30
+            });
+            await player.connect();
         }
-    });
-    player.on('error', error => {
-        console.log(error);
-        if (error.message.includes('The operation was aborted')) {
-            client.queue.delete(guildId);
-            connection.destroy();
+        catch (error) {
+            console.log(error);
+            // エラーが発生した場合は次の曲へ
+            onEnd();
             return;
         }
-        else {
-            console.log(error);
-            client.queue.delete(guildId);
-            connection.destroy();
-            return;
-        }
-    });
+    }
+    else {
+        client.queue.delete(guildId);
+        connection.destroy();
+    }
+    const searchResult = await player.search(`https://www.youtube.com/watch?v=${videoId}`, client.user);
+    if (!searchResult || searchResult.loadType === 'NO_MATCHES') {
+        const embed = new EmbedBuilder()
+            .setTitle('No music found.\n曲が見つかりませんでした。')
+            .setColor(baseColor);
+        const channel = client.channels.cache.get(client.queue.get(guildId)[0].messageChannel);
+        channel.send({ embeds: [embed] });
+        // 見つからない場合は次の曲へ
+        onEnd();
+        return;
+    }
+    const track = searchResult.tracks[0];
+    if (!track) {
+        const embed = new EmbedBuilder()
+            .setTitle('No music found.\n曲が見つかりませんでした。')
+            .setColor(baseColor);
+        const channel = client.channels.cache.get(client.queue.get(guildId)[0].messageChannel);
+        channel.send({ embeds: [embed] });
+        // 見つからない場合は次の曲へ
+        onEnd();
+        return;
+    }
+    await player.queue.add(track);
+    await player.play();
 }
 
 function onPlaying(guildId) {

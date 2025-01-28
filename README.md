@@ -27,6 +27,12 @@ YouTube の音楽を再生できます。URL,検索ワード,プレイリスト�
 
 VOICEVOX冥鳴ひまり(話速1.09, 音高0.06, 抑揚0.78)
 
+## File Structure
+
+```bash
+tree -n -I "node_modules" . -o structure
+```
+
 ## ライセンス
 
 MIT ライセンスです。

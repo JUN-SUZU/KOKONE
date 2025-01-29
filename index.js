@@ -51,7 +51,6 @@ client.history = new Collection();
 client.isSkip = new Collection();
 let searchCache = JSON.parse(fs.readFileSync('./searchCache.json', 'utf8'));
 let videoCache = JSON.parse(fs.readFileSync('./videoCache.json', 'utf8'));
-let accountData = JSON.parse(fs.readFileSync('./account.json', 'utf8'));
 
 client.once('ready', async () => {
     console.log(`Logged in as ${client.user.tag}`);
@@ -209,6 +208,8 @@ client.on('interactionCreate', async (interaction) => {
                 youtube.search(query, 4, function (error, result) {
                     if (error) {
                         console.log(`error has occurred while searching: ${keyword}`);
+                        // .errorフォルダ内に新しいファイルを作成し、エラー内容を書き込む
+                        fs.writeFileSync(`./error/error_${new Date().toLocaleString().replace(/\/|:|\s/g, '_')}.txt`, error, 'utf8');
                         interaction.editReply({
                             content: 'An error has occurred while searching.\n検索中にエラーが発生しました。',
                             ephemeral: true
@@ -751,6 +752,7 @@ const server = http.createServer((req, res) => {
                             return;
                         }
                         let kokoneToken = Math.random().toString(36).slice(-8);
+                        // TODO: MySQLにデータを保存 accountData をMySQLに保存
                         if (!accountData[user.id]) {
                             accountData[user.id] = {
                                 username: user.username,

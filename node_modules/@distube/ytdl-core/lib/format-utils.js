@@ -6,11 +6,9 @@ const audioEncodingRanks = ["mp4a", "mp3", "vorbis", "aac", "opus", "flac"];
 const videoEncodingRanks = ["mp4v", "avc1", "Sorenson H.283", "MPEG-4 Visual", "VP8", "VP9", "H.264"];
 
 const getVideoBitrate = format => format.bitrate || 0;
-const getVideoEncodingRank = format =>
-  videoEncodingRanks.findIndex(enc => format.codecs && format.codecs.includes(enc));
+const getVideoEncodingRank = format => videoEncodingRanks.findIndex(enc => format.codecs?.includes(enc));
 const getAudioBitrate = format => format.audioBitrate || 0;
-const getAudioEncodingRank = format =>
-  audioEncodingRanks.findIndex(enc => format.codecs && format.codecs.includes(enc));
+const getAudioEncodingRank = format => audioEncodingRanks.findIndex(enc => format.codecs?.includes(enc));
 
 /**
  * Sort formats by a list of functions.

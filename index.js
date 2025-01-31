@@ -46,8 +46,6 @@ const client = new Client({
     ]
 });
 
-client.queue = new Collection();
-client.history = new Collection();
 client.isSkip = new Collection();
 let searchCache = JSON.parse(fs.readFileSync('./searchCache.json', 'utf8'));
 let videoCache = JSON.parse(fs.readFileSync('./videoCache.json', 'utf8'));
@@ -154,13 +152,10 @@ client.on('interactionCreate', async (interaction) => {
                 query.match(/^(https?:\/\/)?((music|www)\.)?youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/)) {
                 let videoId = ytdl.getVideoID(query);
                 // add to queue
-                const queue = client.queue.get(interaction.guild.id);
+                const queue = await db.guilds.queue.get(interaction.guild.id);
                 const queueData = { videoId: videoId, messageChannel: interaction.channelId, user: interaction.member.user.username };
-                if (queue) {
-                    queue.push(queueData);
-                    client.queue.set(interaction.guild.id, queue);
-                }
-                else client.queue.set(interaction.guild.id, [queueData]);
+                queue.push(queueData);
+                await db.guilds.queue.set(interaction.guild.id, queue);
                 if (getVoiceConnection(interaction.guild.id)) {
                     return interaction.editReply({
                         embeds: [
@@ -180,15 +175,12 @@ client.on('interactionCreate', async (interaction) => {
                 let playListId = query.match(/list=([a-zA-Z0-9_-]+)/)[1].split('&')[0];
                 let playList = await ytpl(playListId);
                 // add to queue
-                let queue = client.queue.get(interaction.guild.id);
-                if (!queue) {
-                    queue = [];
-                }
+                let queue = await db.guilds.queue.get(interaction.guild.id);
                 playList.items.forEach(item => {
                     queue.push({ videoId: item.id, messageChannel: interaction.channelId, user: interaction.member.user.username });
                     videoCache[item.id] = { title: item.title, channelTitle: item.author.name };
                 });
-                client.queue.set(interaction.guild.id, queue);
+                await db.guilds.queue.set(interaction.guild.id, queue);
                 if (getVoiceConnection(interaction.guild.id)) {
                     return interaction.editReply({
                         embeds: [
@@ -239,12 +231,8 @@ client.on('interactionCreate', async (interaction) => {
         }
         else if (commandName === 'stop') {
             const connection = getVoiceConnection(interaction.guild.id);
-            if (connection) {
-                client.queue.delete(interaction.guild.id);
-                connection.destroy();
-            }
-            const queue = client.queue.get(interaction.guild.id);
-            if (queue) client.queue.delete(interaction.guild.id);
+            if (connection) connection.destroy();
+            await db.guilds.queue.set(interaction.guild.id, []);
             await interaction.reply('Stopped playing music.\n音楽の再生を停止しました。');
         }
         else if (commandName === 'skip') {
@@ -268,7 +256,7 @@ client.on('interactionCreate', async (interaction) => {
                 });
             }
             if (repeatTimes > 1000) repeatTimes = 1000;
-            const queue = client.queue.get(interaction.guild.id);
+            const queue = await db.guilds.queue.get(interaction.guild.id);
             if (!queue) {
                 return await interaction.reply({
                     content: 'No music is playing.\n音楽が再生されていません。',
@@ -280,7 +268,7 @@ client.on('interactionCreate', async (interaction) => {
             for (let i = 0; i < repeatTimes; i++) {
                 queue.unshift(playingMusic);
             }
-            client.queue.set(interaction.guild.id, queue);
+            await db.guilds.queue.set(interaction.guild.id, queue);
             await interaction.reply(`Set to repeat ${repeatTimes} times.\n${repeatTimes}回リピートするように設定しました。${repeatTimes == 1000 ? '（上限）' : ''}`);
         }
         else if (commandName === 'volume') {
@@ -294,8 +282,7 @@ client.on('interactionCreate', async (interaction) => {
             await interaction.reply(`Volume set to ${volume}%.\n音量を${volume}%に設定しました。`);
             if (onPlaying(interaction.guild.id)) {
                 const resource = getVoiceConnection(interaction.guild.id).state.subscription.player.state.resource;
-                let currentVolumeRS = await db.exec(`SELECT volume FROM guilds WHERE guild_id = ${interaction.guild.id}`)
-                let currentVolume = currentVolumeRS[0]?.volume ?? 30;
+                let currentVolume = await db.guilds.volume.get(interaction.guild.id);
                 while (currentVolume != volume) {
                     let diff = volume - currentVolume > 5 ? 5 : volume - currentVolume < -5 ? -5 : volume - currentVolume;
                     currentVolume += diff;
@@ -304,10 +291,10 @@ client.on('interactionCreate', async (interaction) => {
                     await wait(200);
                 }
             }
-            db.exec(`UPDATE guilds SET volume = ${volume} WHERE guild_id = ${interaction.guild.id}`);
+            db.guilds.volume.set(interaction.guild.id, volume);
         }
         else if (commandName === 'history') {
-            const history = client.history.get(interaction.guild.id);
+            const history = await db.guilds.history.get(interaction.guild.id);
             if (!history) {
                 return await interaction.reply({
                     content: 'No music history.\n音楽の履歴がありません。',
@@ -336,7 +323,7 @@ client.on('interactionCreate', async (interaction) => {
             await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
         }
         else if (commandName === 'queue') {
-            const queue = client.queue.get(interaction.guild.id);
+            const queue = await db.guilds.queue.get(interaction.guild.id);
             if (!queue) {
                 return await interaction.reply({
                     content: 'No music in the queue.\nキューに音楽がありません。',
@@ -378,7 +365,7 @@ client.on('interactionCreate', async (interaction) => {
             await interaction.reply('Resumed the music.\n音楽を再開しました。');
         }
         else if (commandName === 'shuffle') {
-            const queue = client.queue.get(interaction.guild.id);
+            const queue = await db.guilds.queue.get(interaction.guild.id);
             if (!queue || queue.length < 2) {
                 return await interaction.reply({
                     content: 'There are no music in the queue or only one music.\nキューに音楽がないか、1曲しかありません。',
@@ -393,7 +380,7 @@ client.on('interactionCreate', async (interaction) => {
                 shuffledQueue.push(queue[randomIndex]);
                 queue.splice(randomIndex, 1);
             }
-            client.queue.set(interaction.guild.id, shuffledQueue);
+            await db.guilds.queue.set(interaction.guild.id, shuffledQueue);
             await interaction.reply('Shuffled the queue.\nキューをシャッフルしました。');
         }
         else if (commandName === 'help') {
@@ -447,15 +434,10 @@ client.on('interactionCreate', async (interaction) => {
             }
             const videoId = interaction.values[0];
             // add to queue
-            const queue = client.queue.get(interaction.guild.id);
+            let queue = await db.guilds.queue.get(interaction.guild.id);
             const queueData = { videoId: videoId, messageChannel: interaction.channelId, user: interaction.member.user.username };
-            if (queue) {
-                queue.push(queueData);
-                client.queue.set(interaction.guild.id, queue);
-            }
-            else {
-                client.queue.set(interaction.guild.id, [queueData]);
-            }
+            queue.push(queueData);
+            await db.guilds.queue.set(interaction.guild.id, queue);
             if (getVoiceConnection(interaction.guild.id)) {
                 return interaction.editReply({
                     embeds: [
@@ -525,15 +507,14 @@ function joinAndReply(interaction) {
 }
 
 async function startMusic(guildId) {
-    const queue = client.queue.get(guildId);
+    const queue = await db.guilds.queue.get(guildId);
     const connection = getVoiceConnection(guildId);
     if (!queue.length) {
-        client.queue.delete(guildId);
+        db.guilds.queue.set(guildId, []);
         connection.destroy();
         return;
     }
     const { videoId, messageChannel } = queue[0];
-    client.queue.set(guildId, queue);
 
     const channel = client.channels.cache.get(messageChannel);
     let embed = new EmbedBuilder()
@@ -581,11 +562,13 @@ async function startMusic(guildId) {
 async function playMusic(connection, videoId, guildId) {
     fs.writeFileSync('./searchCache.json', JSON.stringify(searchCache, null, 4), 'utf8');
     fs.writeFileSync('./videoCache.json', JSON.stringify(videoCache, null, 4), 'utf8');
-    let history = client.history.get(guildId);
-    if (!history) history = [];
+    let history = await db.guilds.history.get(guildId);
     if (history.length > 10) history.shift();
-    if (!history.includes(videoId)) history.push(videoId);
-    client.history.set(guildId, history);
+    if (history.includes(videoId)) {
+        history = history.filter(id => id !== videoId);
+    }
+    history.push(videoId);
+    await db.guilds.history.set(guildId, history);
     let stream;
     try {
         let info = await ytdl.getInfo(videoId);
@@ -609,8 +592,7 @@ async function playMusic(connection, videoId, guildId) {
         inputType: StreamType.WebmOpus,
         inlineVolume: true
     });
-    const volumeRS = await db.exec(`SELECT volume FROM guilds WHERE guild_id = ${guildId}`);
-    const volume = volumeRS[0]?.volume ?? 30;
+    const volume = await db.guilds.volume.get(guildId);
     resource.volume.setVolume(volume / 100);
     let player = createAudioPlayer();
     player.play(resource);
@@ -620,15 +602,15 @@ async function playMusic(connection, videoId, guildId) {
     player.on(AudioPlayerStatus.Idle, async () => {
         try {
             if (client.isSkip.get(guildId)) return client.isSkip.delete(guildId);
-            let queue = client.queue.get(guildId);
+            let queue = await db.guilds.queue.get(guildId);
             queue.shift();
             if (queue.length > 0) {
-                client.queue.set(guildId, queue);
+                await db.guilds.queue.set(guildId, queue);
                 await wait(2000);// 余韻のために2秒待つ
                 startMusic(guildId);
             }
             else {
-                client.queue.delete(guildId);
+                await db.guilds.queue.set(guildId, []);
                 connection.destroy();
             }
         } catch (error) {
@@ -637,17 +619,9 @@ async function playMusic(connection, videoId, guildId) {
     });
     player.on('error', error => {
         console.log(error);
-        if (error.message.includes('The operation was aborted')) {
-            client.queue.delete(guildId);
-            connection.destroy();
-            return;
-        }
-        else {
-            console.log(error);
-            client.queue.delete(guildId);
-            connection.destroy();
-            return;
-        }
+        db.guilds.queue.set(guildId, []);
+        connection.destroy();
+        return;
     });
 }
 
@@ -663,20 +637,17 @@ function onPlaying(guildId) {
 }
 
 client.on('voiceStateUpdate', async (oldState, newState) => {
-    if (newState.channelId !== null) return;
-    else if (oldState.member.user.id === client.user.id) {
-        const queue = client.queue.get(oldState.guild.id);
+    if (newState.channelId === null && oldState.member.user.id === client.user.id) {
+        const queue = await db.guilds.queue.get(oldState.guild.id);
         if (queue) {
-            client.queue.delete(oldState.guild.id);
+            db.guilds.queue.set(oldState.guild.id, []);
             if (onPlaying(oldState.guild.id)) getVoiceConnection(oldState.guild.id).state.subscription.player.stop();
-            getVoiceConnection(oldState.guild.id).destroy();
+            getVoiceConnection(oldState.guild.id)?.destroy();
         }
     }
 });
 
 cron.schedule('*/10 * * * *', () => {
-    client.queue = client.queue.clone();
-    client.history = client.history.clone();
     client.isSkip = client.isSkip.clone();
 });
 

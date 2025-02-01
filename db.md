@@ -3,19 +3,37 @@
 ## 名称
 
 Database: KOKONE
-table: guilds / clients
+table: guilds / clients / videoCache
 
 ## テーブル
 
 ### guilds
 
-| カラム名 | データ型 | NULL | デフォルト | その他 |
-| guild_id | varchar(20) | YES | NULL | PRIMARY KEY |
-| options | json | YES | NULL | |
-| volume | double | YES | 30 | |
++----------+-------------+------+-----+---------+-------+
+| Field    | Type        | Null | Key | Default | Extra |
++----------+-------------+------+-----+---------+-------+
+| guild_id | varchar(20) | NO   | PRI | NULL    |       |
+| options  | json        | YES  |     | NULL    |       |
+| volume   | double      | YES  |     | 30      |       |
+| queue    | json        | YES  |     | NULL    |       |
+| history  | json        | YES  |     | NULL    |       |
++----------+-------------+------+-----+---------+-------+
 
 ### clients
 
-| カラム名 | データ型 | NULL | デフォルト | その他 |
-| user_id | varchar(20) | YES | NULL | PRIMARY KEY |
-| options | json | YES | NULL | |
++-----------+-------------+------+-----+---------+-------+
+| Field     | Type        | Null | Key | Default | Extra |
++-----------+-------------+------+-----+---------+-------+
+| client_id | varchar(20) | NO   | PRI | NULL    |       |
+| options   | json        | YES  |     | NULL    |       |
++-----------+-------------+------+-----+---------+-------+
+
+### videoCache
+
++---------------+--------------+------+-----+---------+-------+
+| Field         | Type         | Null | Key | Default | Extra |
++---------------+--------------+------+-----+---------+-------+
+| video_id      | varchar(100) | NO   | PRI | NULL    |       |
+| video_title   | varchar(100) | YES  |     | NULL    |       |
+| channel_title | varchar(100) | YES  |     | NULL    |       |
++---------------+--------------+------+-----+---------+-------+

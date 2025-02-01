@@ -29,7 +29,8 @@ class DB {
                 },
                 set : async (guild_id, options) => {
                     const optionsString = JSON.stringify(options);
-                    return await this.exec(`INSERT INTO guilds (guild_id, options) VALUES (${guild_id}, '${optionsString}') ON DUPLICATE KEY UPDATE options = '${optionsString}'`);
+                    // return await this.exec(`INSERT INTO guilds (guild_id, options) VALUES (${guild_id}, '${optionsString}') ON DUPLICATE KEY UPDATE options = '${optionsString}'`);
+                    return await this.exec(`INSERT INTO guilds (guild_id, options) VALUES (${guild_id}, ?) ON DUPLICATE KEY UPDATE options = ?`, [optionsString, optionsString]);
                 }
             },
             queue : {
@@ -39,7 +40,8 @@ class DB {
                 },
                 set : async (guild_id, queue) => {
                     const queueString = JSON.stringify(queue);
-                    return await this.exec(`INSERT INTO guilds (guild_id, queue) VALUES (${guild_id}, '${queueString}') ON DUPLICATE KEY UPDATE queue = '${queueString}'`);
+                    // return await this.exec(`INSERT INTO guilds (guild_id, queue) VALUES (${guild_id}, '${queueString}') ON DUPLICATE KEY UPDATE queue = '${queueString}'`);
+                    return await this.exec(`INSERT INTO guilds (guild_id, queue) VALUES (${guild_id}, ?) ON DUPLICATE KEY UPDATE queue = ?`, [queueString, queueString]);
                 }
             },
             history : {
@@ -49,7 +51,8 @@ class DB {
                 },
                 set : async (guild_id, history) => {
                     const historyString = JSON.stringify(history);
-                    return await this.exec(`INSERT INTO guilds (guild_id, history) VALUES (${guild_id}, '${historyString}') ON DUPLICATE KEY UPDATE history = '${historyString}'`);
+                    // return await this.exec(`INSERT INTO guilds (guild_id, history) VALUES (${guild_id}, '${historyString}') ON DUPLICATE KEY UPDATE history = '${historyString}'`);
+                    return await this.exec(`INSERT INTO guilds (guild_id, history) VALUES (${guild_id}, ?) ON DUPLICATE KEY UPDATE history = ?`, [historyString, historyString]);
                 }
             },
             volume : {
@@ -68,16 +71,17 @@ class DB {
                 return resData[0] ?? null;
             },
             set : async (video_id, video_title, channel_title) => {
-                return await this.exec(`INSERT INTO videoCache (video_id, video_title, channel_title) VALUES ('${video_id}', '${video_title}', '${channel_title}')`);
+                // return await this.exec(`INSERT INTO videoCache (video_id, video_title, channel_title) VALUES ('${video_id}', '${video_title}', '${channel_title}')`);
+                return await this.exec(`INSERT INTO videoCache (video_id, video_title, channel_title) VALUES ('${video_id}', ?, ?) ON DUPLICATE KEY UPDATE video_title = ?, channel_title = ?`, [video_title, channel_title, video_title, channel_title]);
             }
         }
         this.guilds = guilds;
         this.videoCache = videoCache;
     }
 
-    async exec(query) {
+    async exec(query, values = []) {
         try {
-            const result = await this.queryAsync(query);
+            const result = await this.queryAsync(query, values);
             return result;
         } catch (err) {
             console.log(err);

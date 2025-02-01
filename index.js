@@ -322,9 +322,9 @@ client.on('interactionCreate', async (interaction) => {
                 .setDescription('List of the last 10 songs played.\n最後10回に再生された曲のリストです。\n' +
                     'Please press the button to play the song.\n曲を再生するにはボタンを押してください。')
                 .setColor(baseColor);
-            const cacheData = await db.exec(`SELECT * FROM videoCache WHERE video_id IN (${history.map(id => `'${id}'`).join(',')})`);
             for (let i = 0; i < history.length; i++) {
-                embed.addFields({ name: `No.${i + 1}`, value: `[${cacheData[i].video_title}](https://www.youtube.com/watch?v=${history[i]})\nby ${cacheData[i].channel_title}` });
+                const cacheData = await db.videoCache.get(history[i]);
+                embed.addFields({ name: `No.${i + 1}`, value: `[${cacheData.video_title}](https://www.youtube.com/watch?v=${history[i]})\nby ${cacheData.channel_title}` });
             }
             // add button
             const options = [];
@@ -352,9 +352,13 @@ client.on('interactionCreate', async (interaction) => {
                 .setDescription('List of songs in the queue.\nキューに入っている曲のリストです。')
                 .setColor(baseColor);
             let size = queue.length > 10 ? 10 : queue.length;
-            const cacheData = await db.exec(`SELECT * FROM videoCache WHERE video_id IN (${queue.map(data => `'${data.videoId}'`).join(',')})`);
             for (let i = 0; i < size; i++) {
-                embed.addFields({ name: `No.${i + 1}`, value: `[${cacheData[i].video_title}](https://www.youtube.com/watch?v=${queue[i].videoId})\nby ${cacheData[i].channel_title}` });
+                const cacheData = await db.videoCache.get(queue[i].videoId);
+                embed.addFields({ name: `No.${i + 1}`, value: `[${cacheData.video_title}](https://www.youtube.com/watch?v=${queue[i].videoId})\nby ${cacheData.channel_title}` });
+            }
+            if (queue.length > 10) {
+                // embed.setFooter(`There are ${queue.length - 10} more songs in the queue.\nキューにはあと${queue.length - 10}曲あります。`);
+                embed.setFooter({ text: `There are ${queue.length - 10} more songs in the queue.\nキューにはあと${queue.length - 10}曲あります。` });
             }
             await interaction.reply({ embeds: [embed], ephemeral: true });
         }

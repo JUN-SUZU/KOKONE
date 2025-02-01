@@ -48,7 +48,6 @@ const client = new Client({
 
 client.isSkip = new Collection();
 let searchCache = JSON.parse(fs.readFileSync('./searchCache.json', 'utf8'));
-let videoCache = JSON.parse(fs.readFileSync('./videoCache.json', 'utf8'));
 
 client.once('ready', async () => {
     console.log(`Logged in as ${client.user.tag}`);
@@ -151,6 +150,18 @@ client.on('interactionCreate', async (interaction) => {
                 query.match(/^(https?:\/\/)?((music|www)\.)?youtu\.be\/([a-zA-Z0-9_-]{11})/) ||
                 query.match(/^(https?:\/\/)?((music|www)\.)?youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/)) {
                 let videoId = ytdl.getVideoID(query);
+                if (!videoId) {
+                    return interaction.editReply({
+                        content: 'Invalid URL.\nURLが無効です。',
+                        ephemeral: true
+                    });
+                }
+                else if (!await addVideoCache(videoId)) {
+                    return interaction.editReply({
+                        content: 'The music could not be found.\n曲が見つかりませんでした。',
+                        ephemeral: true
+                    });
+                }
                 // add to queue
                 const queue = await db.guilds.queue.get(interaction.guild.id);
                 const queueData = { videoId: videoId, messageChannel: interaction.channelId, user: interaction.member.user.username };
@@ -176,10 +187,15 @@ client.on('interactionCreate', async (interaction) => {
                 let playList = await ytpl(playListId);
                 // add to queue
                 let queue = await db.guilds.queue.get(interaction.guild.id);
-                playList.items.forEach(item => {
-                    queue.push({ videoId: item.id, messageChannel: interaction.channelId, user: interaction.member.user.username });
-                    videoCache[item.id] = { title: item.title, channelTitle: item.author.name };
+                const videoCachePromises = playList.items.map(item => {
+                    queue.push({
+                        videoId: item.id,
+                        messageChannel: interaction.channelId,
+                        user: interaction.member.user.username
+                    });
+                    return db.videoCache.set(item.id, item.title, item.author.name);
                 });
+                await Promise.all(videoCachePromises);
                 await db.guilds.queue.set(interaction.guild.id, queue);
                 if (getVoiceConnection(interaction.guild.id)) {
                     return interaction.editReply({
@@ -197,7 +213,7 @@ client.on('interactionCreate', async (interaction) => {
             else if (searchCache[query]) createSelectMenu(interaction, searchCache[query]);
             else {
                 // 検索
-                youtube.search(query, 4, function (error, result) {
+                youtube.search(query, 4, async function (error, result) {
                     if (error) {
                         console.log(`error has occurred while searching: ${keyword}`);
                         // .errorフォルダ内に新しいファイルを作成し、エラー内容を書き込む
@@ -221,7 +237,7 @@ client.on('interactionCreate', async (interaction) => {
                             options.push(
                                 { label: result.items[i].snippet.title, description: result.items[i].snippet.channelTitle, value: result.items[i].id.videoId }
                             );
-                            videoCache[result.items[i].id.videoId] = { title: result.items[i].snippet.title, channelTitle: result.items[i].snippet.channelTitle };
+                            await db.videoCache.set(result.items[i].id.videoId, result.items[i].snippet.title, result.items[i].snippet.channelTitle);
                         }
                         searchCache[query] = options;
                         createSelectMenu(interaction, options);
@@ -257,7 +273,7 @@ client.on('interactionCreate', async (interaction) => {
             }
             if (repeatTimes > 1000) repeatTimes = 1000;
             const queue = await db.guilds.queue.get(interaction.guild.id);
-            if (!queue) {
+            if (!queue.length) {
                 return await interaction.reply({
                     content: 'No music is playing.\n音楽が再生されていません。',
                     ephemeral: true
@@ -295,7 +311,7 @@ client.on('interactionCreate', async (interaction) => {
         }
         else if (commandName === 'history') {
             const history = await db.guilds.history.get(interaction.guild.id);
-            if (!history) {
+            if (!history || history.length == 0) {
                 return await interaction.reply({
                     content: 'No music history.\n音楽の履歴がありません。',
                     ephemeral: true
@@ -306,8 +322,9 @@ client.on('interactionCreate', async (interaction) => {
                 .setDescription('List of the last 10 songs played.\n最後10回に再生された曲のリストです。\n' +
                     'Please press the button to play the song.\n曲を再生するにはボタンを押してください。')
                 .setColor(baseColor);
+            const cacheData = await db.exec(`SELECT * FROM videoCache WHERE video_id IN (${history.map(id => `'${id}'`).join(',')})`);
             for (let i = 0; i < history.length; i++) {
-                embed.addFields({ name: `No.${i + 1}`, value: `[${videoCache[history[i]].title}](https://www.youtube.com/watch?v=${history[i]})\nby ${videoCache[history[i]].channelTitle}` });
+                embed.addFields({ name: `No.${i + 1}`, value: `[${cacheData[i].video_title}](https://www.youtube.com/watch?v=${history[i]})\nby ${cacheData[i].channel_title}` });
             }
             // add button
             const options = [];
@@ -324,7 +341,7 @@ client.on('interactionCreate', async (interaction) => {
         }
         else if (commandName === 'queue') {
             const queue = await db.guilds.queue.get(interaction.guild.id);
-            if (!queue) {
+            if (!queue.length) {
                 return await interaction.reply({
                     content: 'No music in the queue.\nキューに音楽がありません。',
                     ephemeral: true
@@ -335,8 +352,9 @@ client.on('interactionCreate', async (interaction) => {
                 .setDescription('List of songs in the queue.\nキューに入っている曲のリストです。')
                 .setColor(baseColor);
             let size = queue.length > 10 ? 10 : queue.length;
+            const cacheData = await db.exec(`SELECT * FROM videoCache WHERE video_id IN (${queue.map(data => `'${data.videoId}'`).join(',')})`);
             for (let i = 0; i < size; i++) {
-                embed.addFields({ name: `No.${i + 1}`, value: `[${videoCache[queue[i].videoId].title}](https://www.youtube.com/watch?v=${queue[i].videoId})\nby ${videoCache[queue[i].videoId].channelTitle}` });
+                embed.addFields({ name: `No.${i + 1}`, value: `[${cacheData[i].video_title}](https://www.youtube.com/watch?v=${queue[i].videoId})\nby ${cacheData[i].channel_title}` });
             }
             await interaction.reply({ embeds: [embed], ephemeral: true });
         }
@@ -366,7 +384,7 @@ client.on('interactionCreate', async (interaction) => {
         }
         else if (commandName === 'shuffle') {
             const queue = await db.guilds.queue.get(interaction.guild.id);
-            if (!queue || queue.length < 2) {
+            if (queue.length < 2) {
                 return await interaction.reply({
                     content: 'There are no music in the queue or only one music.\nキューに音楽がないか、1曲しかありません。',
                     ephemeral: true
@@ -439,11 +457,12 @@ client.on('interactionCreate', async (interaction) => {
             queue.push(queueData);
             await db.guilds.queue.set(interaction.guild.id, queue);
             if (getVoiceConnection(interaction.guild.id)) {
+                const videoData = await db.videoCache.get(videoId);
                 return interaction.editReply({
                     embeds: [
                         new EmbedBuilder()
-                            .setTitle(`${interaction.member.user.username} added to queue.\nキューに追加されました。\n${videoCache[videoId].title}`)
-                            .setDescription(videoCache[videoId].channelTitle)
+                            .setTitle(`${interaction.member.user.username} added to queue.\nキューに追加されました。\n${videoData.video_title}`)
+                            .setDescription(videoData.channel_title)
                             .setImage(`https://img.youtube.com/vi/${videoId}/default.jpg`)
                             .setColor(baseColor)
                     ],
@@ -475,10 +494,7 @@ function createSelectMenu(interaction, videoId) {
             .setColor(baseColor);
         // サムネイルを追加
         // https://img.youtube.com/vi/{videoId}/default.jpg
-        videoId.forEach(video => {
-            let thumbnail = `https://img.youtube.com/vi/${video.value}/default.jpg`;
-            embed.setThumbnail(thumbnail);
-        });
+        embed.setThumbnail(`https://img.youtube.com/vi/${videoId[0].value}/default.jpg`);
         return interaction.editReply({ embeds: [embed], components: [row], ephemeral: true });
     }
     else {
@@ -522,46 +538,42 @@ async function startMusic(guildId) {
         .setImage(`https://img.youtube.com/vi/${videoId}/default.jpg`)
         .setColor([233, 30, 99]);
 
-    if (videoCache[videoId]) {
-        // https://www.google.com/search?q=+site:www.uta-net.com URLエンコード
-        let kashiURL = encodeURI(`https://www.google.com/search?q=${videoCache[videoId].title}+Lyrics`);
-        embed.setTitle(videoCache[videoId].title);
-        embed.setDescription(`再生を開始します。Now playing.\n${videoCache[videoId].channelTitle}\nadded by ${queue[0].user}`);
-        embed.setAuthor({ name: '歌詞 Lyrics', url: kashiURL });
-        channel.send({ embeds: [embed] });
-        playMusic(connection, videoId, guildId);
-    }
-    else {
-        //動画の情報を取得
-        youtube.getById(videoId, function (error, result) {
-            if (result.items.length == 0 || error) {
-                return channel.send({
-                    embeds: [
-                        new EmbedBuilder()
-                            .setTitle("失敗")
-                            .setDescription("曲が見つかりませんでした。")
-                            .setColor(baseColor)
-                    ]
-                });
-            }
-            else {
-                // https://www.google.com/search?q=+site:www.uta-net.com URLエンコード
-                let kashiURL = encodeURI(`https://www.google.com/search?q=${result.items[0].snippet.title}+Lyrics`);
-                embed.setTitle(result.items[0].snippet.title);
-                embed.setDescription(`再生を開始します。Now playing.\n${result.items[0].snippet.channelTitle}\nadded by ${queue[0].user}`);
-                embed.setAuthor({ name: '歌詞 Lyrics', url: kashiURL });
-                channel.send({ embeds: [embed] });
-                videoCache[videoId] = { title: result.items[0].snippet.title, channelTitle: result.items[0].snippet.channelTitle };
-                //再生
-                playMusic(connection, videoId, guildId);
-            }
+    // https://www.google.com/search?q=+site:www.uta-net.com URLエンコード
+    const videoData = await db.videoCache.get(videoId);
+    let kashiURL = encodeURI(`https://www.google.com/search?q=${videoData.video_title}+Lyrics`);
+    embed.setTitle(videoData.video_title);
+    embed.setDescription(`再生を開始します。Now playing.\n${videoData.channel_title}\nadded by ${queue[0].user}`);
+    embed.setAuthor({ name: '歌詞 Lyrics', url: kashiURL });
+    channel.send({ embeds: [embed] });
+    playMusic(connection, videoId, guildId);
+}
+
+async function addVideoCache(videoId) {
+    const videoData = await db.videoCache.get(videoId);
+    if (videoData) return true;
+    try {
+        // YouTube API から動画情報を取得
+        const result = await new Promise((resolve, reject) => {
+            youtube.getById(videoId, (error, result) => {
+                if (error || result.items.length === 0) {
+                    reject(error || new Error("Video not found"));
+                } else {
+                    resolve(result);
+                }
+            });
         });
+        // 取得したデータをキャッシュに保存
+        await db.videoCache.set(videoId, result.items[0].snippet.title, result.items[0].snippet.channelTitle);
+        return true;
+    } catch (error) {
+        console.error(`Failed to fetch video: ${videoId}`, error);
+        return false;
     }
 }
 
+
 async function playMusic(connection, videoId, guildId) {
     fs.writeFileSync('./searchCache.json', JSON.stringify(searchCache, null, 4), 'utf8');
-    fs.writeFileSync('./videoCache.json', JSON.stringify(videoCache, null, 4), 'utf8');
     let history = await db.guilds.history.get(guildId);
     if (history.length > 10) history.shift();
     if (history.includes(videoId)) {
@@ -604,7 +616,7 @@ async function playMusic(connection, videoId, guildId) {
             if (client.isSkip.get(guildId)) return client.isSkip.delete(guildId);
             let queue = await db.guilds.queue.get(guildId);
             queue.shift();
-            if (queue.length > 0) {
+            if (queue.length) {
                 await db.guilds.queue.set(guildId, queue);
                 await wait(2000);// 余韻のために2秒待つ
                 startMusic(guildId);
@@ -724,15 +736,15 @@ const server = http.createServer((req, res) => {
                         }
                         let kokoneToken = Math.random().toString(36).slice(-8);
                         // TODO: MySQLにデータを保存 accountData をMySQLに保存
-                        if (!accountData[user.id]) {
-                            accountData[user.id] = {
-                                username: user.username,
-                                globalName: user["global_name"],
-                                avatar: `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`,
-                                verified: user.verified,
-                                token: kokoneToken
-                            };
-                        }
+                        // if (!accountData[user.id]) {
+                        //     accountData[user.id] = {
+                        //         username: user.username,
+                        //         globalName: user["global_name"],
+                        //         avatar: `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`,
+                        //         verified: user.verified,
+                        //         token: kokoneToken
+                        //     };
+                        // }
                         res.writeHead(200, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ result: 'success', userID: user.id, token: kokoneToken }));
                     });

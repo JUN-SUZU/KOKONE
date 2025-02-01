@@ -62,7 +62,17 @@ class DB {
                 }
             }
         }
+        const videoCache = {
+            get : async (video_id) => {
+                const resData = await this.exec(`SELECT * FROM videoCache WHERE video_id = '${video_id}'`);
+                return resData[0] ?? null;
+            },
+            set : async (video_id, video_title, channel_title) => {
+                return await this.exec(`INSERT INTO videoCache (video_id, video_title, channel_title) VALUES ('${video_id}', '${video_title}', '${channel_title}')`);
+            }
+        }
         this.guilds = guilds;
+        this.videoCache = videoCache;
     }
 
     async exec(query) {

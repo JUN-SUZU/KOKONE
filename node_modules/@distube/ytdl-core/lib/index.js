@@ -42,9 +42,7 @@ ytdl.cache = {
 ytdl.version = require("../package.json").version;
 
 const createStream = options => {
-  const stream = new PassThrough({
-    highWaterMark: (options && options.highWaterMark) || 1024 * 512,
-  });
+  const stream = new PassThrough({ highWaterMark: options?.highWaterMark || 1024 * 512 });
   stream._destroy = () => {
     stream.destroyed = true;
   };
@@ -153,9 +151,9 @@ const downloadFromInfoCallback = (stream, info, options) => {
     let shouldBeChunked = dlChunkSize !== 0 && (!format.hasAudio || !format.hasVideo);
 
     if (shouldBeChunked) {
-      let start = (options.range && options.range.start) || 0;
+      let start = options.range?.start || 0;
       let end = start + dlChunkSize;
-      const rangeEnd = options.range && options.range.end;
+      const rangeEnd = options.range?.end;
 
       contentLength = options.range
         ? (rangeEnd ? rangeEnd + 1 : parseInt(format.contentLength)) - start
@@ -188,7 +186,7 @@ const downloadFromInfoCallback = (stream, info, options) => {
       if (options.begin) {
         format.url += `&begin=${parseTimestamp(options.begin)}`;
       }
-      if (options.range && (options.range.start || options.range.end)) {
+      if (options.range?.start || options.range?.end) {
         requestOptions.headers = Object.assign({}, requestOptions.headers, {
           Range: `bytes=${options.range.start || "0"}-${options.range.end || ""}`,
         });

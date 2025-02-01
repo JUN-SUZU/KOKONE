@@ -38,7 +38,7 @@ exports.getMedia = info => {
         let contents = row.metadataRowRenderer.contents[0];
         media[title] = getText(contents);
         let runs = contents.runs;
-        if (runs && runs[0].navigationEndpoint) {
+        if (runs?.[0]?.navigationEndpoint) {
           media[`${title}_url`] = new URL(
             runs[0].navigationEndpoint.commandMetadata.webCommandMetadata.url,
             BASE_URL,
@@ -76,7 +76,7 @@ exports.getMedia = info => {
   return media;
 };
 
-const isVerified = badges => !!(badges && badges.find(b => b.metadataBadgeRenderer.tooltip === "Verified"));
+const isVerified = badges => !!badges?.find(b => b.metadataBadgeRenderer.tooltip === "Verified");
 
 /**
  * Get video author.
@@ -91,12 +91,7 @@ exports.getAuthor = info => {
     verified = false;
   try {
     let results = info.response.contents.twoColumnWatchNextResults.results.results.contents;
-    let v = results.find(
-      v2 =>
-        v2.videoSecondaryInfoRenderer &&
-        v2.videoSecondaryInfoRenderer.owner &&
-        v2.videoSecondaryInfoRenderer.owner.videoOwnerRenderer,
-    );
+    let v = results.find(v2 => v2?.videoSecondaryInfoRenderer?.owner?.videoOwnerRenderer);
     let videoOwnerRenderer = v.videoSecondaryInfoRenderer.owner.videoOwnerRenderer;
     channelId = videoOwnerRenderer.navigationEndpoint.browseEndpoint.browseId;
     thumbnails = videoOwnerRenderer.thumbnail.thumbnails.map(thumbnail => {
@@ -109,12 +104,12 @@ exports.getAuthor = info => {
     // Do nothing.
   }
   try {
-    let videoDetails = info.player_response.microformat && info.player_response.microformat.playerMicroformatRenderer;
-    let id = (videoDetails && videoDetails.channelId) || channelId || info.player_response.videoDetails.channelId;
+    let videoDetails = info.player_response.microformat?.playerMicroformatRenderer;
+    let id = videoDetails?.channelId || channelId || info.player_response.videoDetails.channelId;
     let author = {
       id: id,
-      name: videoDetails ? videoDetails.ownerChannelName : info.player_response.videoDetails.author,
-      user: videoDetails ? videoDetails.ownerProfileUrl.split("/").slice(-1)[0] : null,
+      name: videoDetails?.ownerChannelName ?? info.player_response.videoDetails.author,
+      user: videoDetails?.ownerProfileUrl.split("/").slice(-1)[0] ?? null,
       channel_url: `https://www.youtube.com/channel/${id}`,
       external_channel_url: videoDetails ? `https://www.youtube.com/channel/${videoDetails.externalChannelId}` : "",
       user_url: videoDetails ? new URL(videoDetails.ownerProfileUrl, BASE_URL).toString() : "",
@@ -138,7 +133,7 @@ const parseRelatedVideo = (details, rvsParams) => {
     let shortViewCount = getText(details.shortViewCountText);
     let rvsDetails = rvsParams.find(elem => elem.id === details.videoId);
     if (!/^\d/.test(shortViewCount)) {
-      shortViewCount = (rvsDetails && rvsDetails.short_view_count_text) || "";
+      shortViewCount = rvsDetails?.short_view_count_text || "";
     }
     viewCount = (/^\d/.test(viewCount) ? viewCount : shortViewCount).split(" ")[0];
     let browseEndpoint = details.shortBylineText.runs[0].navigationEndpoint.browseEndpoint;
@@ -173,12 +168,14 @@ const parseRelatedVideo = (details, rvsParams) => {
       view_count: viewCount.replace(/,/g, ""),
       length_seconds: details.lengthText
         ? Math.floor(parseTimestamp(getText(details.lengthText)) / 1000)
-        : rvsParams && `${rvsParams.length_seconds}`,
+        : rvsParams
+          ? `${rvsParams.length_seconds}`
+          : undefined,
       thumbnails: details.thumbnail.thumbnails,
       richThumbnails: details.richThumbnail
         ? details.richThumbnail.movingThumbnailRenderer.movingThumbnailDetails.thumbnails
         : [],
-      isLive: !!(details.badges && details.badges.find(b => b.metadataBadgeRenderer.label === "LIVE NOW")),
+      isLive: !!details.badges?.find(b => b.metadataBadgeRenderer.label === "LIVE NOW"),
     };
 
     utils.deprecate(
@@ -288,7 +285,7 @@ exports.cleanVideoDetails = (videoDetails, info) => {
 
   // Use more reliable `lengthSeconds` from `playerMicroformatRenderer`.
   videoDetails.lengthSeconds =
-    (info.player_response.microformat && info.player_response.microformat.playerMicroformatRenderer.lengthSeconds) ||
+    info.player_response.microformat?.playerMicroformatRenderer?.lengthSeconds ||
     info.player_response.videoDetails.lengthSeconds;
   return videoDetails;
 };
@@ -300,11 +297,7 @@ exports.cleanVideoDetails = (videoDetails, info) => {
  * @returns {Array.<Object>}
  */
 exports.getStoryboards = info => {
-  const parts =
-    info.player_response.storyboards &&
-    info.player_response.storyboards.playerStoryboardSpecRenderer &&
-    info.player_response.storyboards.playerStoryboardSpecRenderer.spec &&
-    info.player_response.storyboards.playerStoryboardSpecRenderer.spec.split("|");
+  const parts = info.player_response?.storyboards?.playerStoryboardSpecRenderer?.spec?.split("|");
 
   if (!parts) return [];
 
@@ -342,16 +335,10 @@ exports.getStoryboards = info => {
  * @returns {Array.<Object>}
  */
 exports.getChapters = info => {
-  const playerOverlayRenderer =
-    info.response && info.response.playerOverlays && info.response.playerOverlays.playerOverlayRenderer;
-  const playerBar =
-    playerOverlayRenderer &&
-    playerOverlayRenderer.decoratedPlayerBarRenderer &&
-    playerOverlayRenderer.decoratedPlayerBarRenderer.decoratedPlayerBarRenderer &&
-    playerOverlayRenderer.decoratedPlayerBarRenderer.decoratedPlayerBarRenderer.playerBar;
-  const markersMap =
-    playerBar && playerBar.multiMarkersPlayerBarRenderer && playerBar.multiMarkersPlayerBarRenderer.markersMap;
-  const marker = Array.isArray(markersMap) && markersMap.find(m => m.value && Array.isArray(m.value.chapters));
+  const playerOverlayRenderer = info.response?.playerOverlays?.playerOverlayRenderer;
+  const playerBar = playerOverlayRenderer?.decoratedPlayerBarRenderer?.decoratedPlayerBarRenderer?.playerBar;
+  const markersMap = playerBar?.multiMarkersPlayerBarRenderer?.markersMap;
+  const marker = Array.isArray(markersMap) && markersMap.find(m => Array.isArray(m.value?.chapters));
   if (!marker) return [];
   const chapters = marker.value.chapters;
 

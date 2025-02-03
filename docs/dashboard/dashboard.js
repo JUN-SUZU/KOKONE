@@ -1,99 +1,47 @@
-let settings = {};
-let userID = localStorage.getItem('userID'), token = localStorage.getItem('token');
-if (!userID || !token) {
-    document.getElementById('error').innerText = 'Discordにログインする必要があります。3秒後にリダイレクトします。';
-    document.getElementById('error').style.display = 'block';
-    setTimeout(() => {
-        window.location.href = '/login/';
-    }, 3000);
-}
-else fetch('/api/user/' + userID + '/dashboard/', {
-    method: 'POST',
-    headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + token
-    },
-    body: JSON.stringify({ token: token })
-}).then(response => {
-    if (response.status === 200) {
-        return response.json();
-    } else {
-        throw new Error('Failed to fetch data');
-    }
-}).then(data => {
-    if (data.status === 'success') {
-        document.getElementById('accountIcon').innerText = data.data.iconURL;
-        document.getElementById('meIcon').innerText = data.data.iconURL;
-        document.getElementById('accountName').innerText = data.data.globalUsername;
-        const { clientData, guildsData } = data.data;
-        guildsData.forEach(guild => {
-            let guildElement = document.createElement('div');
-            guildElement.className = 'server__icon';
-            guildElement.id = guild.id;
-            guildElement.innerHTML = `
-                <img src="${guild.iconURL}" alt="${guild.name}のサーバーアイコン">
-            `;
-            guildElement.onclick = () => {
-                serverChange(guild.id);
-            }
-            document.getElementById('serversList').appendChild(guildElement);
-        });
-    }
-    else {
-        document.getElementById('error').innerText = data.message;
-        document.getElementById('error').style.display = 'block';
-        localStorage.removeItem('userID');
-        localStorage.removeItem('token');
-        setTimeout(() => {
-            window.location.href = '/login/';
-        }, 3000);
-    }
-}).catch(error => {
-    console.error(error);
+document.addEventListener('DOMContentLoaded', function () {
+    // Your code here...
+    console.log('Hello from the dashboard!');
+    const equalizer = document.getElementById('equalizer');// canvas element
+    drawEqualizer(equalizer);
 });
 
-let currentPage = ['me', 'profile'];
-
-function serverChange(guildID) {// 個人用設定はguildIDがme
-    if (currentPage[0] === guildID) return;
-    let guild = settings[guildID];
-    document.getElementById('serverName').innerText = guild.name;
-    document.getElementById(guildID).classList.add('selected');
-    if (guildID === 'me') {
-        document.getElementsByClassName('me__tabs__list')[0].style.display = 'block';
-        document.getElementsByClassName('server__tabs__list')[0].style.display = 'none';
-        refreshPage('me', 'profile');
+let diffEqualizer = [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ];
+async function drawEqualizer(equalizer) {
+    const ctx = equalizer.getContext('2d');
+    const width = equalizer.width;
+    const height = equalizer.height;
+    const gap = 3;
+    const maxHeight = height * 0.8;
+    ctx.clearRect(0, 0, width, height);
+    for (let i = 0; i < 10; i++) {
+        diffEqualizer[i] += Math.random() * 0.1 - 0.05;
+        diffEqualizer[i] = Math.max(0, Math.min(1, diffEqualizer[i]));
+        diffEqualizer[i-1] && Math.abs(diffEqualizer[i] - diffEqualizer[i-1]) > 0.05 ? diffEqualizer[i-1] += (diffEqualizer[i] - diffEqualizer[i-1]) * 0.1 : null;
+        diffEqualizer[i+1] && Math.abs(diffEqualizer[i] - diffEqualizer[i+1]) > 0.05 ? diffEqualizer[i+1] += (diffEqualizer[i] - diffEqualizer[i+1]) * 0.1 : null;
+        const lineHeight = Math.max(10, Math.min(maxHeight, diffEqualizer[i] * maxHeight));
+        ctx.fillStyle = `hsl(${diffEqualizer[i] * 360}, 100%, 96%)`;
+        const xLeft = width / 4 + (-i) * (gap + 2);
+        // ctx.fillRect(xLeft, height - lineHeight, 2, lineHeight);
+        // ctx.fillRect(xRight, height - lineHeight, 2, lineHeight);
+        // 角を丸くする
+        ctx.beginPath();
+        ctx.moveTo(xLeft, height);
+        ctx.lineTo(xLeft, height - lineHeight);
+        ctx.arc(xLeft + 1, height - lineHeight, 1, 0, Math.PI, true);
+        ctx.lineTo(xLeft + 2, height - lineHeight);
+        ctx.lineTo(xLeft + 2, height);
+        ctx.fill();
+        const xRight = width * 3 / 4 + i * (gap + 2);
+        ctx.beginPath();
+        ctx.moveTo(xRight, height);
+        ctx.lineTo(xRight, height - lineHeight);
+        ctx.arc(xRight + 1, height - lineHeight, 1, 0, Math.PI, true);
+        ctx.lineTo(xRight + 2, height - lineHeight);
+        ctx.lineTo(xRight + 2, height);
+        ctx.fill();
     }
-    else {
-        document.getElementsByClassName('me__tabs__list')[0].style.display = 'none';
-        document.getElementsByClassName('server__tabs__list')[0].style.display = 'block';
-        refreshPage('server', 'profile');
-    }
-}
-
-function refreshPage(type, page) {
-    if (currentPage[0] === type && currentPage[1] === page) return;
-    loadPageData(page);
-    document.getElementsByClassName('page__content__' + currentPage[1])[0].style.display = 'none';
-    document.getElementsByClassName('page__content__' + page)[0].style.display = 'block';
-    currentPage = [type, page];
-}
-
-function loadPageData(page) {
-    if (page === 'profile') {
-        // プロフィールページのデータを取得
-        // アイコン
-        // 名前
-        // 自己紹介
-        // 好きな楽曲
-        // 好きなアーティスト
-        // 好きなジャンル
-        // 曲・アーティスト・ジャンルの公開設定
-    }
-    else if (page === 'playlists') {
-        // プレイリストページのデータを取得
-        // プレイリスト一覧
-        // プレイリストの作成・編集・削除
-        // 公式プレイリストの追加
-    }
+    requestAnimationFrame(() => {
+        // 100ms wait before next frame
+        setTimeout(() => drawEqualizer(equalizer), 16);
+    });
 }

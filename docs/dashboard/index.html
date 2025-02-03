@@ -18,153 +18,56 @@
     <title>ダッシュボード | KOKONE</title>
     <link rel="stylesheet" type="text/css" href="../css/reset.css">
     <link rel="stylesheet" type="text/css" href="../css/dashboard.css">
+    <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
+    <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
 </head>
 
 <body>
-    <header>
-        <button class="menu__button__header" id="menuButton">
-            <img src="../assets/img/menu-outline.svg" alt="メニュー(3本の横線が並んだアイコンで、クリックするとサーバーリストが表示されます)">
-        </button>
-        <div class="logo__link__header">
-            <a href="../" class="logo">
-                <h1>KOKONE</h1>
-            </a>
-        </div>
-        <div class="popup__buttons__header">
-            <button class="popup__button__header howto" onclick="popup(1)">使い方</button>
-            <button class="popup__button__header command" onclick="popup(2)">コマンド</button>
-            <button class="popup__button__header support" onclick="popup(3)">サポート</button>
-        </div>
-        <div class="account__menu__header">
-            <img src="../assets/img/discord-mark-white.svg" alt="Discordアカウントのアイコン" class="account__icon__header"
-                id="accountIcon">
-            <div class="account__name__header" id="accountName"></div>
-        </div>
-    </header>
+    <div class="bg__panel">
+        <img src="../assets/img/bg.png" alt="背景画像。" class="bg__img">
+    </div>
     <main>
-        <nav class="menu__panel__leftbar">
-            <div class="servers__list__leftedge">
-                <div class="server__icon" onclick="serverChange('me')" id="me">
-                    <img src="../assets/img/discord-mark-white.svg" alt="Discordアカウントのアイコン" id="meIcon">
-                </div>
-                <div class="verticalline__separator__middle__menu"></div>
-                <div class="servers__list__bottom" id="serversList"></div>
-            </div>
-            <div class="tabs__list__leftedge">
-                <h2 class="servername__label__top" id="serverName">個人用設定</h2>
-                <div class="verticalline__separator__middle__options"></div>
-                <div class="tabs__list__bottom" id="optionsList">
-                    <div class="me__tabs__list">
-                        <button class="tab__button" onclick="refreshPage('me', 'profile')">プロフィール</button>
-                        <button class="tab__button" onclick="refreshPage('me', 'playlist')">プレイリスト</button>
-                        <button class="tab__button" onclick="refreshPage('me', 'favorite')">お気に入り</button>
-                        <button class="tab__button" onclick="refreshPage('me', 'setting')">設定</button>
-                    </div>
-                    <div class="server__tabs__list">
-                        <button class="tab__button" onclick="refreshPage('server', 'play')">再生</button>
-                        <button class="tab__button" onclick="refreshPage('server', 'queue')">キュー</button>
-                        <button class="tab__button" onclick="refreshPage('server', 'playlist')">プレイリスト</button>
-                        <button class="tab__button" onclick="refreshPage('server', 'ranking')">ランキング</button>
-                        <button class="tab__button" onclick="refreshPage('server', 'history')">履歴</button>
-                        <button class="tab__button" onclick="refreshPage('server', 'library')">ライブラリ</button>
-                        <button class="tab__button" onclick="refreshPage('server', 'setting')">設定</button>
-                    </div>
-                </div>
-            </div>
+        <nav class="tabs">
+            <button>
+                <p class="tab__icon"><ion-icon name="play"></ion-icon></p>
+                <p class="tab__text">再生</p>
+            </button>
+            <button>
+                <p class="tab__icon"><ion-icon name="settings"></ion-icon></p>
+                <p class="tab__text">設定</p>
+            </button>
+            <button>
+                <p class="tab__icon"><ion-icon name="library"></ion-icon></p>
+                <p class="tab__text">リスト</p>
+            </button>
+            <button>
+                <p class="tab__icon"><ion-icon name="pie-chart-outline"></ion-icon></p>
+                <p class="tab__text">情報</p>
+            </button>
+            <button>
+                <p class="tab__icon"><ion-icon name="dice-outline"></ion-icon></p>
+                <p class="tab__text">おまかせ</p>
+            </button>
         </nav>
-        <section class="main__panel__content">
-            <div class="page__content__profile">
-                <div class="profile__container">
-                    <div class="profile__icon__container">
-                        <!-- <img src="../assets/img/discord-mark-white.svg" alt="Discordアカウントのアイコン" class="profile__icon"
-                            id="profileIcon"> -->
-                    </div>
-                    <div class="profile__name__container">
-                        <div class="profile__name" id="profileName"></div>
-                        <div class="profile__id" id="profileId"></div>
-                    </div>
-                </div>
-                <div class="profile__listening__container">
-                    <div class="profile__listening__label">視聴中の曲</div>
-                    <div class="profile__listening" id="profileListening">
-                        <div class="profile__listening__title" id="profileListeningTitle"></div>
-                        <label for="profileListeningPublish"
-                            class="profile__listening__publish__label">視聴中の曲を公開する</label>
-                        <input type="checkbox" id="profileListeningPublish" class="profile__listening__publish">
-                    </div>
-                </div>
-                <div class="profile__favorite__container">
-                    <div class="profile__favorite__label">お気に入りの曲</div>
-                    <div class="profile__favorite" id="profileFavorite">
-                        <div class="profile__favorite__title" id="profileFavoriteTitle"></div>
-                        <label for="profileFavoritePublish"
-                            class="profile__favorite__publish__label">お気に入りの曲を公開する</label>
-                        <input type="checkbox" id="profileFavoritePublish" class="profile__favorite__publish">
-                    </div>
-                </div>
+        <div class="main__panel">
+            <div class="bg__equalizer">
+                <canvas class="equalizer" id="equalizer"></canvas>
             </div>
-            <div class="page__content__play">
-                <div class="play__controls">
-                    <button class="play__button" onclick="playMusic()"><img src="../assets/img/play.svg"
-                            alt="再生ボタン"></button>
-                    <button class="pause__button" onclick="pauseMusic()"><img src="../assets/img/pause.svg"
-                            alt="一時停止ボタン"></button>
-                    <button class="stop__button" onclick="stopMusic()"><img src="../assets/img/stop.svg"
-                            alt="停止ボタン"></button>
-                    <button class="skip__button" onclick="skipMusic()"><img src="../assets/img/skip.svg"
-                            alt="スキップボタン"></button>
-                    <button class="repeat__button" onclick="repeatMusic()"><img src="../assets/img/repeatQueue.svg"
-                            alt="リピートボタン"></button>
-                </div>
-                <div class="play__info">
-                    <div class="play__title" id="playingTitle"></div>
-                    <div class="play__artist" id="playingArtist"></div>
-                </div>
-                <div class="play__progress">
-                    <input type="range" id="playProgress" value="0" max="100">
-                </div>
-                <div class="play__volume">
-                    <input type="range" id="playVolume" value="100" max="100">
-                </div>
+            <div class="main__contents">
+                <h1>PLAY</h1>
             </div>
-            <div class="page__content__queue">
-                <div class="queue__list" id="queueList">
-                    <!-- TODO: clone item by using cloneNode method -->
-                    <div class="queue__item">
-                        <div class="queue__item__image">
-                            <img src="../assets/img/discord-mark-white.svg" alt="音楽のサムネイル">
-                        </div>
-                        <div class="queue__item__text">
-                            <div class="queue__item__title">曲名</div>
-                            <div class="queue__item__artist">アーティスト</div>
-                            <div class="queue__item__duration">再生時間</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="page__content__playlist">
-                <div class="playlist__list" id="playlistList">
-                    <div class="playlist__item">
-                        <div class="playlist__item__image">
-                            <img src="../assets/img/discord-mark-white.svg" alt="プレイリストのサムネイル">
-                        </div>
-                        <div class="playlist__item__text">
-                            <div class="playlist__item__title">プレイリスト名</div>
-                            <div class="playlist__item__count">曲数</div>
-                            <div class="playlist__item__playcount">再生回数</div>
-                            <div class="playlist__item__play">
-                                <button class="playlist__item__play__button">再生</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="page__content__favorite"></div>
-            <div class="page__content__ranking"></div>
-            <div class="page__content__history"></div>
-            <div class="page__content__library"></div>
-            <div class="page__content__setting"></div>
-        </section>
+        </div>
+        <nav class="servers">
+            <button>
+                <img src="../assets/img/discord-mark-white.svg" alt="サーバーアイコン。" class="server__icon">
+            </button>
+            <button>
+                <img src="../assets/img/discord-mark-white.svg" alt="サーバーアイコン。" class="server__icon">
+            </button>
+            <button>
+                <img src="../assets/img/discord-mark-white.svg" alt="サーバーアイコン。" class="server__icon">
+            </button>
+        </nav>
     </main>
 </body>
 <script src="./dashboard.js"></script>

@@ -4,22 +4,33 @@ const config = require('./config.json');
 
 class DB {
     constructor() {
-        this.connection = mysql.createConnection({
-            host: config.mysql.host,
-            user: config.mysql.user,
-            password: config.mysql.password,
-            database: config.mysql.database,
-            charset: 'utf8mb4'
-        });
-        // this.connectAsync = util.promisify(this.connection.connect).bind(this.connection);
-        this.connection.connect((err) => {
-            if (err) {
-                console.error('error connecting: ' + err.stack);
-                return;
-            }
-            console.log('connected as id ' + this.connection.threadId);
-        });
-        this.queryAsync = util.promisify(this.connection.query).bind(this.connection);
+        const connect = () => {
+            this.connection = mysql.createConnection({
+                host: config.mysql.host,
+                user: config.mysql.user,
+                password: config.mysql.password,
+                database: config.mysql.database,
+                charset: 'utf8mb4'
+            });
+            // this.connectAsync = util.promisify(this.connection.connect).bind(this.connection);
+            this.connection.connect((err) => {
+                if (err) {
+                    console.error('error connecting: ' + err.stack);
+                    return;
+                }
+                console.log('connected as id ' + this.connection.threadId);
+            });
+            this.queryAsync = util.promisify(this.connection.query).bind(this.connection);
+            this.connection.on('error', (err) => {
+                console.log('db error', err);
+                if (err.code === 'PROTOCOL_CONNECTION_LOST') {
+                    connect();
+                } else {
+                    throw err;
+                }
+            });
+        }
+        connect();
         // this.endAsync = util.promisify(this.connection.end).bind(this.connection);
         const guilds = {
             options: {

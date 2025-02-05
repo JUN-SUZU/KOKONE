@@ -134,6 +134,177 @@ body main .main__panel .main__contents h1 {
      -moz-user-select: none;
           user-select: none;
 }
+body main .main__panel .main__contents .player__disk {
+  position: absolute;
+  top: 25%;
+  left: 50%;
+  width: 8rem;
+  height: 8rem;
+  margin: -4rem;
+  border: 6px solid #badcff;
+  border-radius: 50%;
+  background: #3b577b;
+  box-shadow: 0 0 1rem 0.5rem rgba(0, 0, 0, 0.2);
+  animation: rotate 10s linear infinite;
+}
+@keyframes rotate {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+body main .main__panel .main__contents .player__disk .disk__img {
+  width: 100%;
+  height: 100%;
+  -o-object-fit: cover;
+     object-fit: cover;
+  border-radius: 50%;
+  -webkit-user-select: none;
+     -moz-user-select: none;
+          user-select: none;
+  -webkit-user-drag: none;
+}
+body main .main__panel .main__contents .player__info {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  height: 7.5rem;
+  padding: 1rem;
+}
+body main .main__panel .main__contents .player__info .info__title {
+  font-family: "BizinGothicDiscord";
+  font-size: 1.5rem;
+}
+body main .main__panel .main__contents .player__info .info__artist {
+  font-family: "BizinGothicDiscord";
+  font-size: 1.25rem;
+}
+body main .main__panel .main__contents .player__control {
+  position: absolute;
+  bottom: 2rem;
+  left: 0;
+  width: 100%;
+  height: 5rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+}
+body main .main__panel .main__contents .player__control .seekbar__panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+}
+body main .main__panel .main__contents .player__control .seekbar__panel .seekbar__label {
+  font-family: "BizinGothicDiscord";
+  text-align: center;
+  color: white;
+}
+body main .main__panel .main__contents .player__control .seekbar__panel .seekbar__progress {
+  position: relative;
+  display: flex;
+  width: 50%;
+  height: 0.5rem;
+  max-width: 400px;
+  background: #1c2b3a;
+  border-radius: 0.5rem;
+  margin-block: 1rem;
+  pointer-events: none;
+}
+body main .main__panel .main__contents .player__control .seekbar__panel .seekbar__progress .seekbar__bar {
+  width: 0;
+  height: 100%;
+  background: linear-gradient(to right, #ff4b8b, #ffcc70);
+  border-radius: 0.5rem;
+  animation: progress 10s linear infinite;
+}
+body main .main__panel .main__contents .player__control .seekbar__panel .seekbar__progress .thumb {
+  width: 1rem;
+  height: 1rem;
+  background: white;
+  border-radius: 50%;
+  position: absolute;
+  top: 50%;
+  left: 0;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 2px 5px rgba 255, 255, 255, 0.5;
+  pointer-events: none;
+  animation: thumb 10s linear infinite;
+}
+@keyframes progress {
+  0% {
+    width: 0;
+  }
+  100% {
+    width: 100%;
+  }
+}
+@keyframes thumb {
+  0% {
+    left: 0;
+  }
+  100% {
+    left: 100%;
+  }
+}
+body main .main__panel .main__contents .player__control .volume__panel {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+body main .main__panel .main__contents .player__control .volume__panel .volume__progress {
+  width: 50%;
+  max-width: 200px;
+  background: #1c2b3a;
+  border-radius: 0.5rem;
+  margin: 0 1rem;
+}
+body main .main__panel .main__contents .player__control .buttons__panel {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+body main .main__panel .main__contents .player__control .buttons__panel button {
+  width: 3rem;
+  height: 3rem;
+  margin: 0.5rem;
+  padding: 0.5rem;
+  border: none;
+  border-radius: 50%;
+  background: linear-gradient(#ff4b8b, #ff758c);
+  box-shadow: 0 0 1rem 0.5rem rgba(0, 0, 0, 0.2);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: white;
+  font-size: 1.5rem;
+}
+body main .main__panel .main__contents .player__control .buttons__panel button:hover {
+  filter: brightness(1.2);
+  cursor: pointer;
+  border: 2px solid white;
+}
+body main .main__panel .main__contents .player__control .buttons__panel button:active {
+  filter: brightness(0.8);
+  transform: scale(0.96);
+}
+@media screen and (max-width: 1200px) {
+  body main .main__panel .main__contents .player__control .buttons__panel button {
+    width: 2.5rem;
+    height: 2.5rem;
+    margin: 0.25rem;
+  }
+}
+@media screen and (max-width: 1200px) {
+  body main .main__panel .main__contents .player__control {
+    bottom: 6rem;
+  }
+}
 body main .servers {
   display: flex;
   justify-content: center;

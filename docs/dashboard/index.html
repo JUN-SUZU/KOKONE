@@ -55,6 +55,46 @@
             </div>
             <div class="main__contents">
                 <h1>PLAY</h1>
+                <div class="player__disk">
+                    <img src="../assets/img/disk__img.png" alt="再生中の曲のジャケット画像。" class="disk__img">
+                </div>
+                <div class="player__info">
+                    <p class="info__title">曲名</p>
+                    <p class="info__artist">アーティスト名</p>
+                </div>
+                <div class="player__control">
+                    <div class="seekbar__panel">
+                        <p class="seekbar__label">再生位置: 0:00</p>
+                        <div class="seekbar__progress" id="seekbar">
+                            <div class="seekbar__bar"></div>
+                            <div class="thumb"></div>
+                        </div>
+                    </div>
+                    <div class="volume__panel">
+                        <input type="range" class="volume__progress" value="100" max="100">
+                        <label for="volume" class="volume__label">音量: 100%</label>
+                    </div>
+                    <div class="buttons__panel">
+                        <button>
+                            <ion-icon name="volume-mute"></ion-icon>
+                        </button>
+                        <button>
+                            <ion-icon name="shuffle"></ion-icon>
+                        </button>
+                        <button>
+                            <ion-icon name="play"></ion-icon>
+                        </button>
+                        <button>
+                            <ion-icon name="pause"></ion-icon>
+                        </button>
+                        <button>
+                            <ion-icon name="play-skip-forward"></ion-icon>
+                        </button>
+                        <button>
+                            <ion-icon name="square"></ion-icon>
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
         <nav class="servers">

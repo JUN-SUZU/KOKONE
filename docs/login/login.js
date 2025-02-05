@@ -1,6 +1,5 @@
-let userID = localStorage.getItem('userID');
-let token = localStorage.getItem('token');
-if (userID && token) {
+const { dId, dToken } = JSON.parse(localStorage.getItem('dAccount')??'{}');
+if (dId && dToken) {
     window.location.href = '/dashboard/';
 }
 // GETのパラメータを取得
@@ -21,8 +20,7 @@ if (code) {
         if (res.status === 200) {
             res.json().then((data) => {
                 if (data.result === 'success') {
-                    localStorage.setItem('userID', data.userID);
-                    localStorage.setItem('token', data.token);
+                    localStorage.setItem('dAccount', JSON.stringify({ dId: data.userID, dToken: data.token }));
                     document.getElementById('error').innerText = 'ログインに成功しました。3秒後にリダイレクトします。';
                     setTimeout(() => {
                         window.location.href = '/dashboard/';

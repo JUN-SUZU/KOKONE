@@ -3,6 +3,16 @@ document.addEventListener('DOMContentLoaded', function () {
     console.log('Hello from the dashboard!');
     const equalizer = document.getElementById('equalizer');// canvas element
     drawEqualizer(equalizer);
+    // connect to the server using WebSocket
+    const { dId, dToken } = JSON.parse(localStorage.getItem('dAccount')??'{}');
+    if (!dId || !dToken) {
+        this.location.href = '/login/';
+        return;
+    }
+    const socket = new WebSocket('wss://dashboard.kokone.jun-suzu.net/ws');
+    socket.onopen = function() {
+        console.log('WebSocket connection established.');
+    };
 });
 
 let diffEqualizer = [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ];

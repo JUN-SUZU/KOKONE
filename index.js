@@ -682,8 +682,8 @@ const server = http.createServer((req, res) => {
     fs.appendFileSync('./log.txt', `${now} ${method} ${url} ${ipadr}\n`, 'utf8');
     if (method === 'OPTIONS') {
         res.writeHead(200, {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'POST',
+            'Access-Control-Allow-Origin': 'https://kokone.jun-suzu.net',
+            'Access-Control-Allow-Methods': 'POST, OPTIONS, GET',
             'Access-Control-Allow-Headers': 'Content-Type',
             'Content-Type': 'application/json'
         });
@@ -699,7 +699,10 @@ const server = http.createServer((req, res) => {
         try {
             const data = JSON.parse(body);
             if (url === '/login/api/') {
-
+                const resHeader = {
+                    'Access-Control-Allow-Origin': 'https://kokone.jun-suzu.net',
+                    'Content-Type': 'application/json'
+                };
                 async function getDiscordToken(code) {
                     const data = {
                         client_id: config.clientID,
@@ -720,7 +723,6 @@ const server = http.createServer((req, res) => {
                     const json = await response.json();
                     return json.access_token;
                 }
-
                 async function getUserData(token) {
                     const options = {
                         headers: {
@@ -730,30 +732,27 @@ const server = http.createServer((req, res) => {
                     const response = await fetch('https://discord.com/api/users/@me', options);
                     return await response.json();
                 }
-
                 getDiscordToken(data.code).then((token) => {
-                    getUserData(token).then((user) => {
+                    getUserData(token).then(async (user) => {
                         if (!user.id) {
-                            res.writeHead(403, { 'Content-Type': 'application/json' });
+                            res.writeHead(403, resHeader);
                             res.end(JSON.stringify({ result: 'fail' }));
                             return;
                         }
-                        let kokoneToken = Math.random().toString(36).slice(-8);
-                        // TODO: MySQLにデータを保存 accountData をMySQLに保存
-                        // if (!accountData[user.id]) {
-                        //     accountData[user.id] = {
-                        //         username: user.username,
-                        //         globalName: user["global_name"],
-                        //         avatar: `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`,
-                        //         verified: user.verified,
-                        //         token: kokoneToken
-                        //     };
-                        // }
-                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        // ランダムな16文字の文字列を生成
+                        let kokoneToken = await db.clients.token.get(user.id);
+                        if (!kokoneToken) kokoneToken = [...Array(16)].map(() => Math.random().toString(36)[2]).join('');
+                        db.clients.set(user.id, {
+                            kokoneToken: kokoneToken,
+                            username: user.username,
+                            globalName: user.global_name,
+                            avatar: `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`
+                        });
+                        res.writeHead(200, resHeader);
                         res.end(JSON.stringify({ result: 'success', userID: user.id, token: kokoneToken }));
                     });
                 }).catch((e) => {
-                    res.writeHead(403, { 'Content-Type': 'application/json' });
+                    res.writeHead(403, resHeader);
                     res.end(JSON.stringify({ result: 'fail' }));
                 });
             }

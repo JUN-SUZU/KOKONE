@@ -13,14 +13,19 @@
     <meta name="language" content="ja">
     <meta name="format-detection" content="telephone=no,email=no,address=no">
     <meta name="theme-color" content="#ff207d">
-    <meta http-equiv="X-Frame-Options" content="DENY">
-    <meta http-equiv="Content-Security-Policy" content="frame-ancestors 'none';">
     <link rel="canonical" href="https://kokone.jun-suzu.net/">
     <link rel="icon" href="./assets/img/favicon.ico">
     <title>KOKONE</title>
     <link rel="stylesheet" type="text/css" href="./css/reset.css">
     <link rel="stylesheet" type="text/css" href="./css/base.css">
     <link rel="stylesheet" type="text/css" href="./css/style.css">
+    <script>
+        if (window.top !== window.self) {
+            document.body.innerHTML = "";
+            window.top.location = window.self.location;
+        }
+    </script>
+
 </head>
 
 <body>

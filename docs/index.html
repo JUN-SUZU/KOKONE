@@ -19,13 +19,6 @@
     <link rel="stylesheet" type="text/css" href="./css/reset.css">
     <link rel="stylesheet" type="text/css" href="./css/base.css">
     <link rel="stylesheet" type="text/css" href="./css/style.css">
-    <script>
-        if (window.top !== window.self) {
-            document.body.innerHTML = "";
-            window.top.location = window.self.location;
-        }
-    </script>
-
 </head>
 
 <body>
@@ -117,5 +110,11 @@
     </footer>
 
 </body>
+<script>
+    if (window.top !== window.self) {
+        document.body.innerHTML = "";
+        window.top.location = window.self.location;
+    }
+</script>
 
 </html>

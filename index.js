@@ -24,6 +24,7 @@ const ytdl = require('@distube/ytdl-core');
 
 // dashboard
 const http = require('http');
+const WebSocket = require('ws');
 
 // other modules
 const fs = require('fs');
@@ -748,13 +749,43 @@ const server = http.createServer((req, res) => {
                             globalName: user.global_name,
                             avatar: `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`
                         });
-                        res.writeHead(200, resHeader);
-                        res.end(JSON.stringify({ result: 'success', userID: user.id, token: kokoneToken }));
+                        // res.writeHead(200, resHeader);
+                        // res.end(JSON.stringify({ result: 'success', userID: user.id, token: kokoneToken }));
+                        res.writeHead(200, {
+                            'Access-Control-Allow-Origin': 'https://kokone.jun-suzu.net',
+                            'Content-Type': 'application/json',
+                            'Set-Cookie': [
+                                `userID=${user.id}; Max-Age=604800; Secure; HttpOnly; SameSite=None; Domain=.jun-suzu.net; Path=/`,
+                                `kokoneToken=${kokoneToken}; Max-Age=604800; Secure; HttpOnly; SameSite=None; Domain=.jun-suzu.net; Path=/`
+                            ]
+                        });
+                        res.end(JSON.stringify({ result: 'success' }));
                     });
                 }).catch((e) => {
                     res.writeHead(403, resHeader);
                     res.end(JSON.stringify({ result: 'fail' }));
                 });
+            }
+            else if (url === '/auth/api/') {
+                const resHeader = {
+                    'Access-Control-Allow-Origin': 'https://kokone.jun-suzu.net',
+                    'Content-Type': 'application/json'
+                };
+                const { userID, kokoneToken } = parseCookies(req);
+                if (!userID || !kokoneToken) {
+                    res.writeHead(403, resHeader);
+                    res.end(JSON.stringify({ result: 'fail' }));
+                    return;
+                }
+                const user = db.clients.get(userID);
+                if (user && user.token === kokoneToken) {
+                    res.writeHead(200, resHeader);
+                    res.end(JSON.stringify({ result: 'success', username: user.username, globalName: user.globalName, avatar: user.avatar }));
+                }
+                else {
+                    res.writeHead(403, resHeader);
+                    res.end(JSON.stringify({ result: 'fail' }));
+                }
             }
         } catch (error) {
             // return no error or message
@@ -763,6 +794,34 @@ const server = http.createServer((req, res) => {
         }
     });
 });
+
+const wsServer = new WebSocket.Server({ server });
+
+wsServer.on('connection', (ws, request) => {
+    const ipadr = request.socket.remoteAddress;
+    ws.on('message', (message) => {
+        console.log('Received:', message, ipadr);
+        try {
+            const data = JSON.parse(message);
+            if (data.type === 'login') {
+                const user = db.clients.get(data.userID);
+                if (user && user.kokoneToken === data.token) {
+                    ws.send(JSON.stringify({ result: 'success', username: user.username, globalName: user.globalName, avatar: user.avatar }));
+                } else {
+                    ws.send(JSON.stringify({ result: 'fail' }));
+                }
+            }
+        } catch (error) {
+            console.log('Bad request received.', ipadr);
+            return;
+        }
+    });
+});
+
+function parseCookies(req) {
+    const cookieHeader = req.headers.cookie || '';
+    return Object.fromEntries(cookieHeader.split('; ').map(c => c.split('=')));
+}
 
 client.login(config.token);
 server.listen(config.httpPort, () => {

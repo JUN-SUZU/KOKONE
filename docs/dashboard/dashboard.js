@@ -1,17 +1,34 @@
+fetch('https://dashboard.kokone.jun-suzu.net/auth/api/', {
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json',
+    },
+    credentials: 'include',
+}).then((res) => {
+    if (res.status === 200) {
+        res.json().then((data) => {
+            if (data.result === 'success') {
+                console.log('Logged in successfully.');
+            } else {
+                console.error('Failed to authenticate. Continue to login with Discord.');
+                window.location.href = 'https://kokone.jun-suzu.net/login/';
+            }
+        });
+    } else {
+        console.error('Failed to authenticate. Continue to login with Discord.');
+        window.location.href = 'https://kokone.jun-suzu.net/login/';
+    }
+});
 document.addEventListener('DOMContentLoaded', function () {
     // Your code here...
     console.log('Hello from the dashboard!');
     const equalizer = document.getElementById('equalizer');// canvas element
     drawEqualizer(equalizer);
     // connect to the server using WebSocket
-    const { dId, dToken } = JSON.parse(localStorage.getItem('dAccount')??'{}');
-    if (!dId || !dToken) {
-        this.location.href = '/login/';
-        return;
-    }
     const socket = new WebSocket('wss://dashboard.kokone.jun-suzu.net/ws');
     socket.onopen = function() {
         console.log('WebSocket connection established.');
+        socket.send(JSON.stringify({ type: 'auth', dId, dToken }));
     };
 });
 

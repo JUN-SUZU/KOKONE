@@ -1,3 +1,4 @@
+if (window.top !== window.self) document.body.innerHTML = "";
 fetch('https://dashboard.kokone.jun-suzu.net/auth/api/', {
     method: 'POST',
     headers: {
@@ -19,20 +20,18 @@ fetch('https://dashboard.kokone.jun-suzu.net/auth/api/', {
         window.location.href = 'https://kokone.jun-suzu.net/login/';
     }
 });
-document.addEventListener('DOMContentLoaded', function () {
-    // Your code here...
-    console.log('Hello from the dashboard!');
-    const equalizer = document.getElementById('equalizer');// canvas element
-    drawEqualizer(equalizer);
-    // connect to the server using WebSocket
-    const socket = new WebSocket('wss://dashboard.kokone.jun-suzu.net/ws');
-    socket.onopen = function() {
-        console.log('WebSocket connection established.');
-        socket.send(JSON.stringify({ type: 'auth', dId, dToken }));
-    };
-});
+// Your code here...
+console.log('Hello from the dashboard!');
+const equalizer = document.getElementById('equalizer');// canvas element
+drawEqualizer(equalizer);
+// connect to the server using WebSocket
+const socket = new WebSocket('wss://dashboard.kokone.jun-suzu.net/ws');
+socket.onopen = function () {
+    console.log('WebSocket connection established.');
+    socket.send(JSON.stringify({ type: 'auth', dId, dToken }));
+};
 
-let diffEqualizer = [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ];
+let diffEqualizer = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 async function drawEqualizer(equalizer) {
     const ctx = equalizer.getContext('2d');
     const width = equalizer.width;
@@ -43,8 +42,8 @@ async function drawEqualizer(equalizer) {
     for (let i = 0; i < 10; i++) {
         diffEqualizer[i] += Math.random() * 0.1 - 0.05;
         diffEqualizer[i] = Math.max(0, Math.min(1, diffEqualizer[i]));
-        diffEqualizer[i-1] && Math.abs(diffEqualizer[i] - diffEqualizer[i-1]) > 0.05 ? diffEqualizer[i-1] += (diffEqualizer[i] - diffEqualizer[i-1]) * 0.1 : null;
-        diffEqualizer[i+1] && Math.abs(diffEqualizer[i] - diffEqualizer[i+1]) > 0.05 ? diffEqualizer[i+1] += (diffEqualizer[i] - diffEqualizer[i+1]) * 0.1 : null;
+        diffEqualizer[i - 1] && Math.abs(diffEqualizer[i] - diffEqualizer[i - 1]) > 0.05 ? diffEqualizer[i - 1] += (diffEqualizer[i] - diffEqualizer[i - 1]) * 0.1 : null;
+        diffEqualizer[i + 1] && Math.abs(diffEqualizer[i] - diffEqualizer[i + 1]) > 0.05 ? diffEqualizer[i + 1] += (diffEqualizer[i] - diffEqualizer[i + 1]) * 0.1 : null;
         const lineHeight = Math.max(10, Math.min(maxHeight, diffEqualizer[i] * maxHeight));
         ctx.fillStyle = `hsl(${diffEqualizer[i] * 360}, 100%, 96%)`;
         const xLeft = width / 4 + (-i) * (gap + 2);

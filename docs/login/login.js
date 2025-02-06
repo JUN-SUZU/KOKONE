@@ -1,3 +1,4 @@
+if (window.top !== window.self) document.body.innerHTML = "";
 fetch('https://dashboard.kokone.jun-suzu.net/auth/api/', {
     method: 'POST',
     headers: {

@@ -701,6 +701,7 @@ const server = http.createServer((req, res) => {
         if (url === '/auth/api/') {
             const resHeader = {
                 'Access-Control-Allow-Origin': 'https://kokone.jun-suzu.net',
+                'Access-Control-Allow-Credentials': 'true',
                 'Content-Type': 'application/json'
             };
             const { userID, kokoneToken } = parseCookies(req);

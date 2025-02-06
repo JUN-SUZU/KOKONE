@@ -31,6 +31,7 @@ if (code) {
             'Content-Type': 'application/json',
         },
         body: JSON.stringify({ code: code }),
+        credentials: 'include',
     };
     fetch('https://dashboard.kokone.jun-suzu.net/login/api/', options).then((res) => {
         if (res.status === 200) {

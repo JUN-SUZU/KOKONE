@@ -686,6 +686,7 @@ const server = http.createServer((req, res) => {
             'Access-Control-Allow-Origin': 'https://kokone.jun-suzu.net',
             'Access-Control-Allow-Methods': 'POST, OPTIONS, GET',
             'Access-Control-Allow-Headers': 'Content-Type',
+            'Access-Control-Allow-Credentials': 'true',
             'Content-Type': 'application/json'
         });
         res.end();
@@ -697,100 +698,102 @@ const server = http.createServer((req, res) => {
         body += chunk;
     });
     req.on('end', () => {
-        try {
-            const data = JSON.parse(body);
-            if (url === '/login/api/') {
-                const resHeader = {
-                    'Access-Control-Allow-Origin': 'https://kokone.jun-suzu.net',
-                    'Content-Type': 'application/json'
-                };
-                async function getDiscordToken(code) {
-                    const data = {
-                        client_id: config.clientID,
-                        client_secret: config.clientSecret,
-                        grant_type: 'authorization_code',
-                        code: code,
-                        redirect_uri: config.url + '/login/',
-                        scope: 'identify email'
+        if (url === '/auth/api/') {
+            const resHeader = {
+                'Access-Control-Allow-Origin': 'https://kokone.jun-suzu.net',
+                'Content-Type': 'application/json'
+            };
+            const { userID, kokoneToken } = parseCookies(req);
+            if (!userID || !kokoneToken) {
+                res.writeHead(403, resHeader);
+                res.end(JSON.stringify({ result: 'fail' }));
+                return;
+            }
+            const user = db.clients.get(userID);
+            if (user && user.token === kokoneToken) {
+                res.writeHead(200, resHeader);
+                res.end(JSON.stringify({ result: 'success', username: user.username, globalName: user.globalName, avatar: user.avatar }));
+            }
+            else {
+                res.writeHead(403, resHeader);
+                res.end(JSON.stringify({ result: 'fail' }));
+            }
+        }
+        else {
+            try {
+                const data = JSON.parse(body);
+                if (url === '/login/api/') {
+                    const resHeader = {
+                        'Access-Control-Allow-Origin': 'https://kokone.jun-suzu.net',
+                        'Content-Type': 'application/json'
                     };
-                    const options = {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded',
-                        },
-                        body: new URLSearchParams(data),
-                    };
-                    const response = await fetch('https://discord.com/api/oauth2/token', options);
-                    const json = await response.json();
-                    return json.access_token;
-                }
-                async function getUserData(token) {
-                    const options = {
-                        headers: {
-                            Authorization: `Bearer ${token}`
-                        }
-                    };
-                    const response = await fetch('https://discord.com/api/users/@me', options);
-                    return await response.json();
-                }
-                getDiscordToken(data.code).then((token) => {
-                    getUserData(token).then(async (user) => {
-                        if (!user.id) {
-                            res.writeHead(403, resHeader);
-                            res.end(JSON.stringify({ result: 'fail' }));
-                            return;
-                        }
-                        // ランダムな16文字の文字列を生成
-                        let kokoneToken = await db.clients.token.get(user.id);
-                        if (!kokoneToken) kokoneToken = [...Array(16)].map(() => Math.random().toString(36)[2]).join('');
-                        db.clients.set(user.id, {
-                            kokoneToken: kokoneToken,
-                            username: user.username,
-                            globalName: user.global_name,
-                            avatar: `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`
+                    async function getDiscordToken(code) {
+                        const data = {
+                            client_id: config.clientID,
+                            client_secret: config.clientSecret,
+                            grant_type: 'authorization_code',
+                            code: code,
+                            redirect_uri: config.url + '/login/',
+                            scope: 'identify email'
+                        };
+                        const options = {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/x-www-form-urlencoded',
+                            },
+                            body: new URLSearchParams(data),
+                        };
+                        const response = await fetch('https://discord.com/api/oauth2/token', options);
+                        const json = await response.json();
+                        return json.access_token;
+                    }
+                    async function getUserData(token) {
+                        const options = {
+                            headers: {
+                                Authorization: `Bearer ${token}`
+                            }
+                        };
+                        const response = await fetch('https://discord.com/api/users/@me', options);
+                        return await response.json();
+                    }
+                    getDiscordToken(data.code).then((token) => {
+                        getUserData(token).then(async (user) => {
+                            if (!user.id) {
+                                res.writeHead(403, resHeader);
+                                res.end(JSON.stringify({ result: 'fail' }));
+                                return;
+                            }
+                            // ランダムな16文字の文字列を生成
+                            let kokoneToken = await db.clients.token.get(user.id);
+                            if (!kokoneToken) kokoneToken = [...Array(16)].map(() => Math.random().toString(36)[2]).join('');
+                            db.clients.set(user.id, {
+                                kokoneToken: kokoneToken,
+                                username: user.username,
+                                globalName: user.global_name,
+                                avatar: `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`
+                            });
+                            // res.writeHead(200, resHeader);
+                            // res.end(JSON.stringify({ result: 'success', userID: user.id, token: kokoneToken }));
+                            res.writeHead(200, {
+                                'Access-Control-Allow-Origin': 'https://kokone.jun-suzu.net',
+                                'Content-Type': 'application/json',
+                                'Set-Cookie': [
+                                    `userID=${user.id}; Max-Age=604800; Secure; HttpOnly; SameSite=None; Domain=.jun-suzu.net; Path=/`,
+                                    `kokoneToken=${kokoneToken}; Max-Age=604800; Secure; HttpOnly; SameSite=None; Domain=.jun-suzu.net; Path=/`
+                                ]
+                            });
+                            res.end(JSON.stringify({ result: 'success' }));
                         });
-                        // res.writeHead(200, resHeader);
-                        // res.end(JSON.stringify({ result: 'success', userID: user.id, token: kokoneToken }));
-                        res.writeHead(200, {
-                            'Access-Control-Allow-Origin': 'https://kokone.jun-suzu.net',
-                            'Content-Type': 'application/json',
-                            'Set-Cookie': [
-                                `userID=${user.id}; Max-Age=604800; Secure; HttpOnly; SameSite=None; Domain=.jun-suzu.net; Path=/`,
-                                `kokoneToken=${kokoneToken}; Max-Age=604800; Secure; HttpOnly; SameSite=None; Domain=.jun-suzu.net; Path=/`
-                            ]
-                        });
-                        res.end(JSON.stringify({ result: 'success' }));
+                    }).catch((e) => {
+                        res.writeHead(403, resHeader);
+                        res.end(JSON.stringify({ result: 'fail' }));
                     });
-                }).catch((e) => {
-                    res.writeHead(403, resHeader);
-                    res.end(JSON.stringify({ result: 'fail' }));
-                });
+                }
+            } catch (error) {
+                // return no error or message
+                console.log('Bad request received.', ipadr);
+                return;
             }
-            else if (url === '/auth/api/') {
-                const resHeader = {
-                    'Access-Control-Allow-Origin': 'https://kokone.jun-suzu.net',
-                    'Content-Type': 'application/json'
-                };
-                const { userID, kokoneToken } = parseCookies(req);
-                if (!userID || !kokoneToken) {
-                    res.writeHead(403, resHeader);
-                    res.end(JSON.stringify({ result: 'fail' }));
-                    return;
-                }
-                const user = db.clients.get(userID);
-                if (user && user.token === kokoneToken) {
-                    res.writeHead(200, resHeader);
-                    res.end(JSON.stringify({ result: 'success', username: user.username, globalName: user.globalName, avatar: user.avatar }));
-                }
-                else {
-                    res.writeHead(403, resHeader);
-                    res.end(JSON.stringify({ result: 'fail' }));
-                }
-            }
-        } catch (error) {
-            // return no error or message
-            console.log('Bad request received.', ipadr);
-            return;
         }
     });
 });

@@ -681,42 +681,27 @@ const server = http.createServer((req, res) => {
     }
     const url = req.url.replace(/\?.*$/, ''), method = req.method, ipadr = getIPAddress(req), now = new Date().toLocaleString();
     fs.appendFileSync('./log.txt', `${now} ${method} ${url} ${ipadr}\n`, 'utf8');
-    if (method === 'OPTIONS') {
-        res.writeHead(200, {
-            'Access-Control-Allow-Origin': 'https://kokone.jun-suzu.net',
-            'Access-Control-Allow-Methods': 'POST, OPTIONS, GET',
-            'Access-Control-Allow-Headers': 'Content-Type',
-            'Access-Control-Allow-Credentials': 'true',
-            'Content-Type': 'application/json'
-        });
-        res.end();
-        return;
-    }
     if (method != 'POST') return;
     let body = '';
     req.on('data', (chunk) => {
         body += chunk;
     });
-    req.on('end', () => {
+    req.on('end', async () => {
         if (url === '/auth/api/') {
-            const resHeader = {
-                'Access-Control-Allow-Origin': 'https://kokone.jun-suzu.net',
-                'Access-Control-Allow-Credentials': 'true',
-                'Content-Type': 'application/json'
-            };
+            console.log(req.headers.cookie);
             const { userID, kokoneToken } = parseCookies(req);
             if (!userID || !kokoneToken) {
-                res.writeHead(403, resHeader);
+                res.writeHead(403, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ result: 'fail' }));
                 return;
             }
-            const user = db.clients.get(userID);
+            const user = await db.clients.get(userID);
             if (user && user.token === kokoneToken) {
-                res.writeHead(200, resHeader);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ result: 'success', username: user.username, globalName: user.globalName, avatar: user.avatar }));
             }
             else {
-                res.writeHead(403, resHeader);
+                res.writeHead(403, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ result: 'fail' }));
             }
         }
@@ -724,10 +709,6 @@ const server = http.createServer((req, res) => {
             try {
                 const data = JSON.parse(body);
                 if (url === '/login/api/') {
-                    const resHeader = {
-                        'Access-Control-Allow-Origin': 'https://kokone.jun-suzu.net',
-                        'Content-Type': 'application/json'
-                    };
                     async function getDiscordToken(code) {
                         const data = {
                             client_id: config.clientID,
@@ -760,7 +741,7 @@ const server = http.createServer((req, res) => {
                     getDiscordToken(data.code).then((token) => {
                         getUserData(token).then(async (user) => {
                             if (!user.id) {
-                                res.writeHead(403, resHeader);
+                                res.writeHead(403, { 'Content-Type': 'application/json' });
                                 res.end(JSON.stringify({ result: 'fail' }));
                                 return;
                             }
@@ -776,7 +757,6 @@ const server = http.createServer((req, res) => {
                             // res.writeHead(200, resHeader);
                             // res.end(JSON.stringify({ result: 'success', userID: user.id, token: kokoneToken }));
                             res.writeHead(200, {
-                                'Access-Control-Allow-Origin': 'https://kokone.jun-suzu.net',
                                 'Content-Type': 'application/json',
                                 'Set-Cookie': [
                                     `userID=${user.id}; Max-Age=604800; Secure; HttpOnly; SameSite=None; Domain=.jun-suzu.net; Path=/`,
@@ -786,7 +766,7 @@ const server = http.createServer((req, res) => {
                             res.end(JSON.stringify({ result: 'success' }));
                         });
                     }).catch((e) => {
-                        res.writeHead(403, resHeader);
+                        res.writeHead(403, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ result: 'fail' }));
                     });
                 }

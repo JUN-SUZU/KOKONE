@@ -31,6 +31,7 @@ const fs = require('fs');
 const path = require('path');
 const cron = require('node-cron');
 const { on } = require('events');
+const { type } = require('node:os');
 const wait = require('node:timers/promises').setTimeout;
 const baseColor = '#ff207d';
 
@@ -49,6 +50,7 @@ const client = new Client({
 
 client.isSkip = new Collection();
 let searchCache = JSON.parse(fs.readFileSync('./searchCache.json', 'utf8'));
+let playingTime = {};
 
 client.once('ready', async () => {
     console.log(`Logged in as ${client.user.tag}`);
@@ -603,6 +605,8 @@ async function playMusic(connection, videoId, guildId) {
             quality: 'highestaudio',
             highWaterMark: 32 * 1024 * 1024
         });
+        const musicLength = await ytdl.getBasicInfo(videoId).then(info => info.videoDetails.lengthSeconds);
+        playingTime[guildId] = { startTime: Date.now(), musicLength: musicLength };
     }
 
     const resource = createAudioResource(stream, {
@@ -621,6 +625,7 @@ async function playMusic(connection, videoId, guildId) {
             if (client.isSkip.get(guildId)) return client.isSkip.delete(guildId);
             let queue = await db.guilds.queue.get(guildId);
             queue.shift();
+            delete playingTime[guildId];
             if (queue.length) {
                 await db.guilds.queue.set(guildId, queue);
                 await wait(2000);// 余韻のために2秒待つ
@@ -782,27 +787,90 @@ const wsServer = new WebSocket.Server({ server });
 
 wsServer.on('connection', (ws, request) => {
     const ipadr = request.socket.remoteAddress;
-    ws.on('message', (message) => {
-        console.log('Received:', message, ipadr);
+    ws.on('message', async (message) => {
         try {
             const data = JSON.parse(message);
-            if (data.type === 'auth') {
-                const { userID, kokoneToken } = parseCookies(request);
-                if (!userID || !kokoneToken) {
-                    ws.send(JSON.stringify({ result: 'fail' }));
+            const { userID, kokoneToken } = parseCookies(request);
+            console.log(userID, kokoneToken);
+            if (!userID || !kokoneToken) return;
+            const user = await db.clients.get(userID);
+            if (!user || user.token !== kokoneToken) return;
+            if (data.action === 'greeting') {
+                // 挨拶があった場合、挨拶を返し、必要な情報を送信
+                ws.send(JSON.stringify({ type: 'response', action: 'greeting', details: 'Hello, This is KOKONE Server.' }));
+                // ユーザーの設定を送信
+                const userSettings = await db.clients.options.get(userID);
+                ws.send(JSON.stringify({ type: 'response', action: 'getUserSettings', details: userSettings }));
+                // 所属しているサーバーのidと名前とアイコンを送信
+                const guilds = client.guilds.cache.filter(guild => guild.members.cache.has(userID)).map(guild => {
+                    return {
+                        id: guild.id,
+                        name: guild.name,
+                        icon: guild.iconURL({ extension: 'png', size: 128 }),
+                        playing: onPlaying(guild.id)
+                    };
+                });
+                if (!guilds.length) ws.send(JSON.stringify({ type: 'response', action: 'getGuilds', details: [] }));
+                ws.send(JSON.stringify({ type: 'response', action: 'getGuilds', details: guilds }));
+            }
+            else if (data.action === 'getGuildData') {
+                const guild = client.guilds.cache.get(data.guildID);
+                if (!guild) {
+                    ws.send(JSON.stringify({ result: 'getGuildData', error: 'Guild not found.' }));
                     return;
                 }
-                const user = db.clients.get(userID);
-                if (user && user.token === kokoneToken) {
-                    ws.send(JSON.stringify({ result: 'success', username: user.username, globalName: user.globalName, avatar: user.avatar }));
-                }
-                else {
-                    ws.send(JSON.stringify({ result: 'fail' }));
-                }
+                // dbから取得したすべてのデータと、playingTimeを送信
+                const guildData = await db.guilds.get(guild.id);
+                guildData.playingTime = playingTime[guild.id] || {};
+                ws.send(JSON.stringify({ type: 'response', action: 'getGuildData', details: guildData }));
             }
-            else if (data.type === 'greeting') {
-                ws.send(JSON.stringify({ result: 'success', message: 'Hello! This is Kokone Dashboard WebSocket server.' }));
+            else if (data.action === 'getVideoData') {
+                const videoData = await db.videoCache.get(data.videoID);
+                videoData.flag = data.flag;
+                ws.send(JSON.stringify({ type: 'response', action: 'getVideoData', details: videoData }));
             }
+            else if (data.action === 'controlPlayer') {
+                const guild = client.guilds.cache.get(data.guildID);
+                if (!guild) {
+                    ws.send(JSON.stringify({ type: 'response', action: 'controlPlayer', error: 'Guild not found.' }));
+                    return;
+                }
+                const connection = getVoiceConnection(data.guildID);
+                if (!connection) {
+                    ws.send(JSON.stringify({ type: 'response', action: 'controlPlayer', error: 'Not connected to voice channel.' }));
+                    return;
+                }
+                const player = connection.state.subscription.player;
+                if (data.control === 'play') player.unpause();
+                else if (data.control === 'pause') player.pause();
+                else if (data.control === 'stop') {
+                    player.stop();
+                    db.guilds.queue.set(guild.id, []);
+                }
+                else if (data.control === 'skip') player.stop();
+                else if (data.control === 'shuffle') {
+                    const queue = await db.guilds.queue.get(guild.id);
+                    if (queue.length < 2) {
+                        ws.send(JSON.stringify({ type: 'response', action: 'controlPlayer', error: 'There are no music in the queue or only one music.' }));
+                        return;
+                    }
+                    const playingMusic = queue.shift();
+                    let shuffledQueue = [playingMusic];
+                    const queueLength = queue.length;
+                    for (let i = 0; i < queueLength; i++) {
+                        const randomIndex = Math.floor(Math.random() * queue.length);
+                        shuffledQueue.push(queue[randomIndex]);
+                        queue.splice(randomIndex, 1);
+                    }
+                    await db.guilds.queue.set(guild.id, shuffledQueue);
+                }
+                else if (data.control === 'volume') {
+                    player.state.resource.volume.setVolume(data.value / 100);
+                    db.guilds.volume.set(guild.id, data.value);
+                }
+                ws.send(JSON.stringify({ type: 'response', action: 'controlPlayer', details: 'Success' }));
+            }
+            // お気に入りリストの取得
         } catch (error) {
             console.log('Bad request received.', ipadr);
             return;

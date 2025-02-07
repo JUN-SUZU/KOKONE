@@ -1,4 +1,5 @@
 if (window.top !== window.self) document.body.innerHTML = "";
+let { username, globalName, avatar } = {};
 fetch('https://dashboard.kokone.jun-suzu.net/auth/api/', {
     method: 'POST',
     headers: {
@@ -10,6 +11,9 @@ fetch('https://dashboard.kokone.jun-suzu.net/auth/api/', {
         res.json().then((data) => {
             if (data.result === 'success') {
                 console.log('Logged in successfully.');
+                username = data.username;
+                globalName = data.globalName;
+                avatar = data.avatar;
             } else {
                 console.error('Failed to authenticate. Continue to login with Discord.');
                 window.location.href = 'https://kokone.jun-suzu.net/login/';
@@ -20,23 +24,122 @@ fetch('https://dashboard.kokone.jun-suzu.net/auth/api/', {
         window.location.href = 'https://kokone.jun-suzu.net/login/';
     }
 });
-// Your code here...
-console.log('Hello from the dashboard!');
-const equalizer = document.getElementById('equalizer');// canvas element
-drawEqualizer(equalizer);
-// connect to the server using WebSocket
-const socket = new WebSocket('wss://dashboard.kokone.jun-suzu.net/ws');
-socket.onopen = function () {
-    console.log('WebSocket connection established.');
-    socket.send(JSON.stringify({ type: 'greeting', data: 'Hello from the dashboard!' }));
-    socket.send(JSON.stringify({ type: 'auth', data: 'Hello from the dashboard!' }));
-};
-socket.onmessage = function (event) {
-    const data = JSON.parse(event.data);
-    console.log('Received data:', data);
-};
 
+let selectedGuild = 0;
+let guilds = [];
+let playingTime = {};
+let handlers = {};
+
+// connect to the server using WebSocket
+let socket;
+const connectWebSocket = () => {
+    new WebSocket('wss://dashboard.kokone.jun-suzu.net/ws');
+    socket.onopen = () => {
+        console.log('WebSocket connection established.');
+        socket.send(JSON.stringify({ action: 'greeting', data: 'Hello from the dashboard!' }));
+    };
+    socket.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === 'greeting') {
+            console.log('Received a greeting from the server:', data.details);
+        }
+        else if (data.type === 'getUserSettings') {
+            console.log('Received user settings.');
+            const userSettings = data.details;
+        }
+        else if (data.type === 'getGuilds') {
+            console.log('Received guilds.');
+            guilds = data.details;
+            const guildList = document.getElementById('servers');
+            guildList.innerHTML = '';
+            for (let i = 0; i < guilds.length; i++) {
+                const guildButton = document.createElement('button');
+                const guildIcon = document.createElement('img');
+                guildIcon.src = guilds[i].icon;
+                guildButton.appendChild(guildIcon);
+                guildButton.addEventListener('click', () => {
+                    selectedGuild = i;
+                    socket.send(JSON.stringify({ action: 'getGuildData', guildID: guilds[i].id }));
+                });
+            }
+            socket.send(JSON.stringify({ action: 'getGuildData', guildID: guilds[0].id }));
+        }
+        else if (data.type === 'getGuildData') {
+            console.log('Received guild data.');
+            const guildData = data.details;
+            document.getElementById('volume').value = guildData.volume;
+            document.getElementById('volumeLabel').innerText = "音量: " + guildData.volume + "%";
+            playingTime = guildData.playingTime;
+            handlers.playingTime = setInterval(() => {
+                const now = new Date().now();
+                const elapsed = now - playingTime.startTime;
+                const percentage = elapsed / musicLength / 10;
+                document.getElementById('seekbarLine').style.width = percentage + '%';
+                document.getElementById('seekbarThumb').style.left = percentage + '%';
+            }, 500);
+            socket.send(JSON.stringify({ action: 'getVideoData', videoID: guildData.queue[0].videoId, flag: 'playing' }));
+        }
+        else if (data.type === 'getVideoData') {
+            console.log('Received video data.');
+            const videoData = data.details;
+            if (videoData.flag === 'playing') {
+                document.getElementById('mtitle').innerText = videoData.title;
+                document.getElementById('martist').innerText = videoData.artist;
+            }
+        }
+    };
+    socket.onclose = () => {
+        console.log('WebSocket connection closed.');
+        setTimeout(connectWebSocket, 1000);
+    };
+    socket.onerror = (error) => {
+        console.error('WebSocket error:', error);
+    };
+};
+connectWebSocket();
+
+class controlButtonEvent {
+    constructor() {
+        const init = () => {
+            document.getElementById('volume').addEventListener('input', () => {
+                const volume = document.getElementById('volume').value;
+                document.getElementById('volumeLabel').innerText = "音量: " + volume + "%";
+                socket.send(JSON.stringify({ action: 'controlPlayer', guildID: guilds[selectedGuild].id, control: 'volume', value: volume }));
+            });
+            document.getElementById('muteButton').addEventListener('click', () => {
+                document.getElementById('volume').value = 0;
+                document.getElementById('volume').dispatchEvent(new Event('input'));// trigger input event
+            });
+            document.getElementById('shuffleButton').addEventListener('click', () => {
+                socket.send(JSON.stringify({ action: 'controlPlayer', guildID: guilds[selectedGuild].id, control: 'shuffle' }));
+            });
+            document.getElementById('playButton').addEventListener('click', () => {
+                socket.send(JSON.stringify({ action: 'controlPlayer', guildID: guilds[selectedGuild].id, control: 'play' }));
+            });
+            document.getElementById('pauseButton').addEventListener('click', () => {
+                socket.send(JSON.stringify({ action: 'controlPlayer', guildID: guilds[selectedGuild].id, control: 'pause' }));
+            });
+            document.getElementById('skipButton').addEventListener('click', () => {
+                socket.send(JSON.stringify({ action: 'controlPlayer', guildID: guilds[selectedGuild].id, control: 'skip' }));
+            });
+            document.getElementById('stopButton').addEventListener('click', () => {
+                socket.send(JSON.stringify({ action: 'controlPlayer', guildID: guilds[selectedGuild].id, control: 'stop' }));
+            });
+        }
+    }
+}
+
+// refresh seekbar
+async function refreshSeekbar() {
+    setTimeout(() => {
+    }, 1000);
+}
+
+
+// draw equalizer
 let diffEqualizer = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+const equalizer = document.getElementById('equalizer');
+drawEqualizer(equalizer);
 async function drawEqualizer(equalizer) {
     const ctx = equalizer.getContext('2d');
     const width = equalizer.width;
@@ -52,8 +155,6 @@ async function drawEqualizer(equalizer) {
         const lineHeight = Math.max(10, Math.min(maxHeight, diffEqualizer[i] * maxHeight));
         ctx.fillStyle = `hsl(${diffEqualizer[i] * 360}, 100%, 96%)`;
         const xLeft = width / 4 + (-i) * (gap + 2);
-        // ctx.fillRect(xLeft, height - lineHeight, 2, lineHeight);
-        // ctx.fillRect(xRight, height - lineHeight, 2, lineHeight);
         // 角を丸くする
         ctx.beginPath();
         ctx.moveTo(xLeft, height);
@@ -72,7 +173,6 @@ async function drawEqualizer(equalizer) {
         ctx.fill();
     }
     requestAnimationFrame(() => {
-        // 100ms wait before next frame
-        setTimeout(() => drawEqualizer(equalizer), 16);
+        setTimeout(() => drawEqualizer(equalizer), 16);// 16ms wait before next frame
     });
 }

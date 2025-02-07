@@ -87,6 +87,16 @@ class DB {
             delete: async (user_id) => {
                 return await this.exec(`DELETE FROM clients WHERE client_id = '${user_id}'`);
             },
+            options: {
+                get: async (user_id) => {
+                    const resData = await this.exec(`SELECT options FROM clients WHERE client_id = '${user_id}'`);
+                    return resData[0] && resData[0].options ? resData[0].options : {};
+                },
+                set: async (user_id, options) => {
+                    const optionsString = JSON.stringify(options);
+                    return await this.exec(`INSERT INTO clients (client_id, options) VALUES ('${user_id}', ?) ON DUPLICATE KEY UPDATE options = ?`, [optionsString, optionsString]);
+                }
+            },
             token: {
                 get: async (user_id) => {
                     const resData = await this.exec(`SELECT token FROM clients WHERE client_id = '${user_id}'`);

@@ -276,14 +276,22 @@ client.on('interactionCreate', async (interaction) => {
             }
             if (repeatTimes > 1000) repeatTimes = 1000;
             const queue = await db.guilds.queue.get(interaction.guild.id);
+            let musictoRepeat;
             if (!queue.length) {
-                return await interaction.reply({
-                    content: 'No music is playing.\n音楽が再生されていません。',
-                    ephemeral: true
-                });
+                const history = await db.guilds.history.get(interaction.guild.id);
+                if (!history.length) {
+                    return await interaction.reply({
+                        content: 'No music has been played even once.\n一度も音楽が再生されていません。',
+                        ephemeral: true
+                    });
+                }
+                const lastMusic = history[history.length - 1];
+                musictoRepeat = { videoId: lastMusic, messageChannel: interaction.channelId };
             }
-            const playingMusic = queue[0];
-            playingMusic.user = interaction.member.user.username;
+            else {
+                musictoRepeat = queue[0];
+            }
+            musictoRepeat.user = interaction.member.user.username;
             for (let i = 0; i < repeatTimes; i++) {
                 queue.unshift(playingMusic);
             }

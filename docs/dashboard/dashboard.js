@@ -28,7 +28,12 @@ drawEqualizer(equalizer);
 const socket = new WebSocket('wss://dashboard.kokone.jun-suzu.net/ws');
 socket.onopen = function () {
     console.log('WebSocket connection established.');
-    socket.send(JSON.stringify({ type: 'auth', dId, dToken }));
+    socket.send(JSON.stringify({ type: 'greeting', data: 'Hello from the dashboard!' }));
+    socket.send(JSON.stringify({ type: 'auth', data: 'Hello from the dashboard!' }));
+};
+socket.onmessage = function (event) {
+    const data = JSON.parse(event.data);
+    console.log('Received data:', data);
 };
 
 let diffEqualizer = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];

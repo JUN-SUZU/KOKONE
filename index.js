@@ -688,7 +688,6 @@ const server = http.createServer((req, res) => {
     });
     req.on('end', async () => {
         if (url === '/auth/api/') {
-            console.log(req.headers.cookie);
             const { userID, kokoneToken } = parseCookies(req);
             if (!userID || !kokoneToken) {
                 res.writeHead(403, { 'Content-Type': 'application/json' });
@@ -787,13 +786,22 @@ wsServer.on('connection', (ws, request) => {
         console.log('Received:', message, ipadr);
         try {
             const data = JSON.parse(message);
-            if (data.type === 'login') {
-                const user = db.clients.get(data.userID);
-                if (user && user.kokoneToken === data.token) {
+            if (data.type === 'auth') {
+                const { userID, kokoneToken } = parseCookies(request);
+                if (!userID || !kokoneToken) {
+                    ws.send(JSON.stringify({ result: 'fail' }));
+                    return;
+                }
+                const user = db.clients.get(userID);
+                if (user && user.token === kokoneToken) {
                     ws.send(JSON.stringify({ result: 'success', username: user.username, globalName: user.globalName, avatar: user.avatar }));
-                } else {
+                }
+                else {
                     ws.send(JSON.stringify({ result: 'fail' }));
                 }
+            }
+            else if (data.type === 'greeting') {
+                ws.send(JSON.stringify({ result: 'success', message: 'Hello! This is Kokone Dashboard WebSocket server.' }));
             }
         } catch (error) {
             console.log('Bad request received.', ipadr);

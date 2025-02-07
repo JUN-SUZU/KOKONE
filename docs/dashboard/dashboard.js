@@ -33,7 +33,7 @@ let handlers = {};
 // connect to the server using WebSocket
 let socket;
 const connectWebSocket = () => {
-    new WebSocket('wss://dashboard.kokone.jun-suzu.net/ws');
+    socket = new WebSocket('wss://dashboard.kokone.jun-suzu.net/ws');
     socket.onopen = () => {
         console.log('WebSocket connection established.');
         socket.send(JSON.stringify({ action: 'greeting', data: 'Hello from the dashboard!' }));

@@ -40,14 +40,14 @@ const connectWebSocket = () => {
     };
     socket.onmessage = (event) => {
         const data = JSON.parse(event.data);
-        if (data.type === 'greeting') {
+        if (data.action === 'greeting') {
             console.log('Received a greeting from the server:', data.details);
         }
-        else if (data.type === 'getUserSettings') {
+        else if (data.action === 'getUserSettings') {
             console.log('Received user settings.');
             const userSettings = data.details;
         }
-        else if (data.type === 'getGuilds') {
+        else if (data.action === 'getGuilds') {
             console.log('Received guilds.');
             guilds = data.details;
             const guildList = document.getElementById('servers');
@@ -64,7 +64,7 @@ const connectWebSocket = () => {
             }
             socket.send(JSON.stringify({ action: 'getGuildData', guildID: guilds[0].id }));
         }
-        else if (data.type === 'getGuildData') {
+        else if (data.action === 'getGuildData') {
             console.log('Received guild data.');
             const guildData = data.details;
             document.getElementById('volume').value = guildData.volume;
@@ -79,7 +79,7 @@ const connectWebSocket = () => {
             }, 500);
             socket.send(JSON.stringify({ action: 'getVideoData', videoID: guildData.queue[0].videoId, flag: 'playing' }));
         }
-        else if (data.type === 'getVideoData') {
+        else if (data.action === 'getVideoData') {
             console.log('Received video data.');
             const videoData = data.details;
             if (videoData.flag === 'playing') {

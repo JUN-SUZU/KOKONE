@@ -794,12 +794,10 @@ const server = http.createServer((req, res) => {
 const wsServer = new WebSocket.Server({ server });
 
 wsServer.on('connection', (ws, request) => {
-    const ipadr = request.socket.remoteAddress;
     ws.on('message', async (message) => {
         try {
             const data = JSON.parse(message);
             const { userID, kokoneToken } = parseCookies(request);
-            console.log(userID, kokoneToken);
             if (!userID || !kokoneToken) return;
             const user = await db.clients.get(userID);
             if (!user || user.token !== kokoneToken) return;

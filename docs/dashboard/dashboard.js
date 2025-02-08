@@ -72,6 +72,7 @@ const connectWebSocket = () => {
             document.getElementById('volume').value = guildData.volume;
             document.getElementById('volumeLabel').innerText = "音量: " + guildData.volume + "%";
             if (guilds[selectedGuild].playing) {
+                document.getElementById('mcover').src = `https://img.youtube.com/vi/${guildData.queue[0].videoId}/default.jpg`;
                 if (handlers.playingTime) clearInterval(handlers.playingTime);
                 playingTime = guildData.playingTime;
                 handlers.playingTime = setInterval(() => {

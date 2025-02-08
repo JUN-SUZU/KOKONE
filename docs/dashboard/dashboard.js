@@ -80,6 +80,10 @@ const connectWebSocket = () => {
                     const now = new Date().getTime();
                     const elapsed = now - playingTime.startTime;
                     const percentage = elapsed / playingTime.musicLength / 10;
+                    if (percentage > 100) {
+                        clearInterval(handlers.playingTime);
+                        return;
+                    }
                     document.getElementById('seekbarLine').style.width = percentage + '%';
                     document.getElementById('seekbarThumb').style.left = percentage + '%';
                     document.getElementById('seekbarTime').innerText = `再生位置: ${Math.floor(elapsed / 60000)}:${("00" + Math.floor(elapsed / 1000) % 60).slice(-2)}`;

@@ -293,7 +293,7 @@ client.on('interactionCreate', async (interaction) => {
             }
             musictoRepeat.user = interaction.member.user.username;
             for (let i = 0; i < repeatTimes; i++) {
-                queue.unshift(playingMusic);
+                queue.unshift(musictoRepeat);
             }
             await db.guilds.queue.set(interaction.guild.id, queue);
             await interaction.reply(`Set to repeat ${repeatTimes} times.\n${repeatTimes}回リピートするように設定しました。${repeatTimes == 1000 ? '（上限）' : ''}`);

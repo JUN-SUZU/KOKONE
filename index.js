@@ -296,7 +296,13 @@ client.on('interactionCreate', async (interaction) => {
                 queue.unshift(musictoRepeat);
             }
             await db.guilds.queue.set(interaction.guild.id, queue);
-            await interaction.reply(`Set to repeat ${repeatTimes} times.\n${repeatTimes}回リピートするように設定しました。${repeatTimes == 1000 ? '（上限）' : ''}`);
+            if (onPlaying(interaction.guild.id)) {
+                await interaction.reply(`Set to repeat ${repeatTimes} times.\n${repeatTimes}回リピートするように設定しました。${repeatTimes == 1000 ? '（上限）' : ''}`);
+            }
+            else {
+                await interaction.reply(`Set to encore ${repeatTimes} times.\n${repeatTimes}回アンコールするように設定しました。${repeatTimes == 1000 ? '（上限）' : ''}`);
+                joinAndReply(interaction);
+            }
         }
         else if (commandName === 'volume') {
             const volume = interaction.options.getNumber('volume');

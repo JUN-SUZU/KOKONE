@@ -794,6 +794,7 @@ const server = http.createServer((req, res) => {
 const wsServer = new WebSocket.Server({ server });
 
 wsServer.on('connection', (ws, request) => {
+    const ipadr = request.headers['x-forwarded-for'].split(/\s*,\s*/)[0];
     ws.on('message', async (message) => {
         try {
             const data = JSON.parse(message);
@@ -816,6 +817,7 @@ wsServer.on('connection', (ws, request) => {
                         playing: onPlaying(guild.id)
                     };
                 });
+                console.log(guilds);
                 if (!guilds.length) ws.send(JSON.stringify({ type: 'response', action: 'getGuilds', details: [] }));
                 ws.send(JSON.stringify({ type: 'response', action: 'getGuilds', details: guilds }));
             }
@@ -879,6 +881,7 @@ wsServer.on('connection', (ws, request) => {
             // お気に入りリストの取得
         } catch (error) {
             console.log('Bad request received.', ipadr);
+            console.log(error);
             return;
         }
     });

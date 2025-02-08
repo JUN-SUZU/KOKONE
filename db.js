@@ -33,6 +33,16 @@ class DB {
         connect();
         // this.endAsync = util.promisify(this.connection.end).bind(this.connection);
         const guilds = {
+            get: async (guild_id) => {
+                const resData = await this.exec(`SELECT * FROM guilds WHERE guild_id = '${guild_id}'`);
+                return resData[0] ?? null;
+            },
+            set: async (guild_id, { options, queue, history, volume }) => {
+                const optionsString = JSON.stringify(options);
+                const queueString = JSON.stringify(queue);
+                const historyString = JSON.stringify(history);
+                return await this.exec(`INSERT INTO guilds (guild_id, options, queue, history, volume) VALUES (${guild_id}, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE options = ?, queue = ?, history = ?, volume = ?`, [optionsString, queueString, historyString, volume, optionsString, queueString, historyString, volume]);
+            },
             options: {
                 get: async (guild_id) => {
                     const resData = await this.exec(`SELECT options FROM guilds WHERE guild_id = '${guild_id}'`);

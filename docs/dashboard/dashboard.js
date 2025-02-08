@@ -55,7 +55,9 @@ const connectWebSocket = () => {
             for (let i = 0; i < guilds.length; i++) {
                 const guildButton = document.createElement('button');
                 const guildIcon = document.createElement('img');
-                guildIcon.src = guilds[i].icon;
+                guildIcon.src = guilds[i].icon ?? '../assets/img/discord-mark-white.svg';
+                guildIcon.alt = 'サーバーアイコン。';
+                guildIcon.className = 'server__icon';
                 guildButton.appendChild(guildIcon);
                 guildButton.addEventListener('click', () => {
                     selectedGuild = i;
@@ -69,14 +71,17 @@ const connectWebSocket = () => {
             const guildData = data.details;
             document.getElementById('volume').value = guildData.volume;
             document.getElementById('volumeLabel').innerText = "音量: " + guildData.volume + "%";
-            playingTime = guildData.playingTime;
-            handlers.playingTime = setInterval(() => {
-                const now = new Date().now();
-                const elapsed = now - playingTime.startTime;
-                const percentage = elapsed / musicLength / 10;
-                document.getElementById('seekbarLine').style.width = percentage + '%';
-                document.getElementById('seekbarThumb').style.left = percentage + '%';
-            }, 500);
+            if (guilds[selectedGuild].playing) {
+                if (handlers.playingTime) clearInterval(handlers.playingTime);
+                playingTime = guildData.playingTime;
+                handlers.playingTime = setInterval(() => {
+                    const now = new Date().now();
+                    const elapsed = now - playingTime.startTime;
+                    const percentage = elapsed / musicLength / 10;
+                    document.getElementById('seekbarLine').style.width = percentage + '%';
+                    document.getElementById('seekbarThumb').style.left = percentage + '%';
+                }, 500);
+            }
             socket.send(JSON.stringify({ action: 'getVideoData', videoID: guildData.queue[0].videoId, flag: 'playing' }));
         }
         else if (data.action === 'getVideoData') {

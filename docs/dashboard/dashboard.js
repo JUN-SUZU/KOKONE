@@ -134,8 +134,11 @@ class controlButtonEvent {
                 socket.send(JSON.stringify({ action: 'controlPlayer', guildID: guilds[selectedGuild].id, control: 'stop' }));
             });
         }
+        init();
     }
 }
+
+new controlButtonEvent();
 
 // refresh seekbar
 async function refreshSeekbar() {

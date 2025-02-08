@@ -89,7 +89,7 @@ const connectWebSocket = () => {
             const videoData = data.details;
             if (videoData.flag === 'playing') {
                 document.getElementById('mtitle').innerText = videoData['video_title'];
-                document.getElementById('martist').innerText = videoData['video_artist'];
+                document.getElementById('martist').innerText = videoData['channel_title'];
             }
         }
     };

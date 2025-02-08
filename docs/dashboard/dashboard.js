@@ -63,6 +63,7 @@ const connectWebSocket = () => {
                     selectedGuild = i;
                     socket.send(JSON.stringify({ action: 'getGuildData', guildID: guilds[i].id }));
                 });
+                guildList.appendChild(guildButton);
             }
             socket.send(JSON.stringify({ action: 'getGuildData', guildID: guilds[0].id }));
         }

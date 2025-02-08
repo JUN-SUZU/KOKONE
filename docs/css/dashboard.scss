@@ -303,6 +303,7 @@ body {
                 .server__icon {
                     width: 100%;
                     height: 100%;
+                    border-radius: 50%;
                 }
                 &.active {
                     border: 2px solid $color;

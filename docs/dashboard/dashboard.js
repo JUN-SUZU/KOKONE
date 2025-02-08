@@ -77,7 +77,7 @@ const connectWebSocket = () => {
                 handlers.playingTime = setInterval(() => {
                     const now = new Date().getTime();
                     const elapsed = now - playingTime.startTime;
-                    const percentage = elapsed / musicLength / 10;
+                    const percentage = elapsed / playingTime.musicLength / 10;
                     document.getElementById('seekbarLine').style.width = percentage + '%';
                     document.getElementById('seekbarThumb').style.left = percentage + '%';
                 }, 500);

@@ -80,6 +80,7 @@ const connectWebSocket = () => {
                     const percentage = elapsed / playingTime.musicLength / 10;
                     document.getElementById('seekbarLine').style.width = percentage + '%';
                     document.getElementById('seekbarThumb').style.left = percentage + '%';
+                    document.getElementById('seekbarTime').innerText = `再生位置: ${Math.floor(elapsed / 60000)}:${Math.floor(elapsed / 1000) % 60}`;
                 }, 500);
             }
             socket.send(JSON.stringify({ action: 'getVideoData', videoID: guildData.queue[0].videoId, flag: 'playing' }));

@@ -316,7 +316,7 @@ body main .servers button:active {
   filter: brightness(0.8);
   transform: scale(0.96);
 }
-body main .servers button .tab__icon {
+body main .servers button .server__icon {
   width: 100%;
   height: 100%;
 }

@@ -75,7 +75,7 @@ const connectWebSocket = () => {
                 if (handlers.playingTime) clearInterval(handlers.playingTime);
                 playingTime = guildData.playingTime;
                 handlers.playingTime = setInterval(() => {
-                    const now = new Date().now();
+                    const now = new Date().getTime();
                     const elapsed = now - playingTime.startTime;
                     const percentage = elapsed / musicLength / 10;
                     document.getElementById('seekbarLine').style.width = percentage + '%';

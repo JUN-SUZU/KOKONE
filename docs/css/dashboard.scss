@@ -206,7 +206,6 @@ body {
                                 height: 100%;
                                 background: linear-gradient(to right, #ff4b8b, #ffcc70);
                                 border-radius: 0.5rem;
-                                animation: progress 10s linear infinite;
                             }
                             .thumb {
                                 width: 1rem;
@@ -219,23 +218,6 @@ body {
                                 transform: translate(-50%, -50%);
                                 box-shadow: 0 2px 5px rgba (255, 255, 255, 0.5);
                                 pointer-events: none;
-                                animation: thumb 10s linear infinite;
-                            }
-                            @keyframes progress {
-                                0% {
-                                    width: 0;
-                                }
-                                100% {
-                                    width: 100%;
-                                }
-                            }
-                            @keyframes thumb {
-                                0% {
-                                    left: 0;
-                                }
-                                100% {
-                                    left: 100%;
-                                }
                             }
                         }
                     }

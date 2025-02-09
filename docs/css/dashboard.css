@@ -1,213 +1,331 @@
 @font-face {
   font-family: "BizinGothicDiscord";
-  src: url("/assets/fonts/BizinGothicDiscord-Regular.ttf") format("truetype");
+  src: url("../assets/fonts/BizinGothicDiscord-Regular.ttf") format("truetype");
+}
+@font-face {
+  font-family: "MoonFlower";
+  src: url("../assets/fonts/Moon-Flower.ttf") format("truetype");
 }
 body {
   color: white;
-  background-color: #2b2b2b;
   min-height: 100vh;
   display: flex;
-  flex-direction: column;
-}
-body header {
-  position: sticky;
-  top: 0;
-  z-index: 1000;
-  padding: 0.25rem;
-  display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
-  background-color: #1e1e1e;
+  flex-wrap: wrap;
 }
-body header .menu__button__header {
-  width: 3rem;
-  height: 3rem;
-  border-radius: 1.5rem;
-  border: #444 solid 1px;
-  background-color: black;
-  transition: background-color 0.3s, border 0.6s;
+body .bg__panel {
+  position: fixed;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, #f890b3 0%, #9bcee8 100%);
+  z-index: -100;
 }
-body header .menu__button__header img {
-  width: 2rem;
-  height: 2rem;
-  border-radius: 1rem;
-}
-body header .menu__button__header:hover {
-  cursor: pointer;
-}
-body header .menu__button__header:active {
-  background-color: gray;
-  border: gray solid 2px;
-}
-body header .logo__link__header {
-  margin-left: 1rem;
-  margin-right: auto;
-  width: 12rem;
-}
-body header .logo__link__header a.logo {
-  color: #ff207d;
-  font-family: Arial, Helvetica, sans-serif;
-  font-weight: bold;
-}
-@media screen and (max-width: 768px) {
-  body header .logo__link__header {
-    display: none;
-  }
-}
-body header .popup__buttons__header {
-  margin-left: auto;
-  margin-right: 1rem;
-  display: flex;
-  align-items: center;
-}
-body header .popup__buttons__header .popup__button__header {
-  padding: 0.75rem 1.25rem;
-  margin: 1px;
-  margin-inline: 0.25rem;
-  color: white;
-  font-size: 1rem;
-  font-family: "BizinGothicDiscord", sans-serif;
-  border: #444 solid 1px;
-  background-color: #45474a;
-  transition: background-color 0.3s, border 0.6s;
-}
-body header .popup__buttons__header .popup__button__header img {
-  width: 2rem;
-  height: 2rem;
-}
-body header .popup__buttons__header .popup__button__header:hover {
-  cursor: pointer;
-  border: rgb(128, 128, 187) solid 1px;
-}
-body header .popup__buttons__header .popup__button__header:active {
-  background-color: gray;
-  border: gray solid 1px;
-}
-@media screen and (max-width: 768px) {
-  body header .popup__buttons__header {
-    display: none;
-  }
-}
-body header .account__menu__header {
-  display: flex;
-  align-items: center;
-}
-body header .account__menu__header img {
-  width: 3rem;
-  height: 3rem;
-  border-radius: 1.5rem;
-  margin-right: 1rem;
-  padding: 0.5rem;
-  background-color: gray;
-}
-body header .account__menu__header .account__name__header {
-  margin-right: 1rem;
-  font-family: "BizinGothicDiscord", sans-serif;
-  font-size: 1rem;
-}
-@media screen and (max-width: 768px) {
-  body header .account__menu__header .account__name__header {
-    display: none;
-  }
+body .bg__panel .bg__img {
+  width: 100%;
+  height: 100%;
+  -o-object-fit: cover;
+     object-fit: cover;
+  filter: blur(5px);
 }
 body main {
   flex-grow: 1;
   display: flex;
-  height: calc(100vh - 60px);
-}
-body main nav {
-  display: flex;
-  width: 19.5rem;
-  height: calc(100vh - 60px);
-}
-body main nav .servers__list__leftedge {
-  width: 72px;
-  height: calc(100vh - 60px);
-  background-color: #1e1f22;
-  border-right: #141517 solid 1px;
-  display: flex;
-  flex-direction: column;
+  justify-content: center;
   align-items: center;
+  background: transparent;
 }
-body main nav .servers__list__leftedge .server__icon {
-  margin: 0.5rem auto;
-  width: 3rem;
-  height: 3rem;
-  border-radius: 1.5rem;
-  transition: border-radius 0.3s;
-  background-color: gray;
+body main .tabs {
+  display: flex;
+  justify-content: center;
+  flex-direction: column;
 }
-body main nav .servers__list__leftedge .server__icon:hover {
-  cursor: pointer;
-  border-radius: 1rem;
-}
-body main nav .servers__list__leftedge .server__icon:hover img {
-  border-radius: 1rem;
-}
-body main nav .servers__list__leftedge .server__icon img {
-  width: 3rem;
-  height: 3rem;
-  border-radius: 1.5rem;
-  padding: 0.25rem;
-}
-body main nav .servers__list__leftedge .verticalline__separator__middle__menu {
-  width: 60%;
-  height: 4px;
-  border-radius: 2px;
-  margin: 0.5rem auto;
-  background-color: #4e5058;
-}
-body main nav .tabs__list__leftedge {
-  width: 15rem;
-  height: calc(100vh - 60px);
-  background-color: #2b2d31;
-}
-body main nav .tabs__list__leftedge .servername__label__top {
-  font-family: "BizinGothicDiscord", sans-serif;
-  font-size: 1rem;
-  color: white;
+body main .tabs button {
+  width: 4rem;
+  height: 4rem;
   margin: 1rem;
+  padding: 0.5rem;
+  border: none;
+  border-radius: 50%;
+  background: #3b577b;
+  box-shadow: 0 0 1rem 0.5rem rgba(0, 0, 0, 0.2);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  color: white;
 }
-body main nav .tabs__list__leftedge .verticalline__separator__middle__options {
+body main .tabs button:hover {
+  filter: brightness(1.2);
+  cursor: pointer;
+  border: 2px solid white;
+}
+body main .tabs button:active {
+  filter: brightness(0.8);
+  transform: scale(0.96);
+}
+body main .tabs button .tab__icon {
+  font-size: 2rem;
+  line-height: 0.5;
+}
+body main .tabs button .tab__text {
+  font-family: "BizinGothicDiscord";
+  font-size: 14px;
+  -webkit-user-select: none;
+     -moz-user-select: none;
+          user-select: none;
+  white-space: nowrap;
+  background-size: calc(overflow * 0.5) 100%;
+  background-image: linear-gradient(transparent 0%, rgba(0, 0, 0, 0.0666666667) 50%);
+}
+@media screen and (max-width: 1200px) {
+  body main .tabs {
+    flex-direction: row;
+    position: absolute;
+    top: calc(100vh - 6rem);
+    left: 0;
+    right: 0;
+    z-index: 2;
+  }
+  body main .tabs button {
+    margin: 4px;
+  }
+}
+body main .main__panel {
+  position: relative;
+  width: 96%;
+  max-width: 1200px;
+  height: 90vh;
+  border-radius: 2rem;
+  background: linear-gradient(#243d5b, #3b577b);
+  box-shadow: 0 0 1rem 0.5rem rgba(0, 0, 0, 0.5);
+}
+body main .main__panel .bg__equalizer {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
-  height: 2px;
-  margin: 0.5rem auto;
-  background-color: black;
+  height: 50%;
+  background-image: url("../assets/img/bg-equalizer.png");
+  background-size: cover;
+  background-position: bottom;
+  border-radius: 2rem 2rem 0 0;
+  mask-image: linear-gradient(to top, rgb(0, 0, 0) 0%, rgba(0, 0, 0, 0) 95%);
+  -webkit-mask-image: linear-gradient(to top, rgb(0, 0, 0) 0%, rgba(0, 0, 0, 0) 95%);
 }
-body main nav .tabs__list__leftedge .tabs__list__bottom {
+body main .main__panel .bg__equalizer .equalizer {
+  width: 100%;
+  height: 100%;
+}
+body main .main__panel .main__contents {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+body main .main__panel .main__contents h1 {
+  font-family: "MoonFlower";
+  font-size: 3rem;
+  margin: 2rem;
+  -webkit-user-select: none;
+     -moz-user-select: none;
+          user-select: none;
+}
+body main .main__panel .main__contents .player__disk {
+  position: absolute;
+  top: 25%;
+  left: 50%;
+  width: 8rem;
+  height: 8rem;
+  margin: -4rem;
+  border: 6px solid #badcff;
+  border-radius: 50%;
+  background: #3b577b;
+  box-shadow: 0 0 1rem 0.5rem rgba(0, 0, 0, 0.2);
+  animation: rotate 10s linear infinite;
+}
+@keyframes rotate {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+body main .main__panel .main__contents .player__disk .disk__img {
+  width: 100%;
+  height: 100%;
+  -o-object-fit: cover;
+     object-fit: cover;
+  border-radius: 50%;
+  -webkit-user-select: none;
+     -moz-user-select: none;
+          user-select: none;
+  -webkit-user-drag: none;
+}
+body main .main__panel .main__contents .player__info {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  height: 7.5rem;
+  padding: 1rem;
+}
+body main .main__panel .main__contents .player__info .info__title {
+  font-family: "BizinGothicDiscord";
+  font-size: 1.5rem;
+}
+body main .main__panel .main__contents .player__info .info__artist {
+  font-family: "BizinGothicDiscord";
+  font-size: 1.25rem;
+}
+body main .main__panel .main__contents .player__control {
+  position: absolute;
+  bottom: 2rem;
+  left: 0;
+  width: 100%;
+  height: 5rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+}
+body main .main__panel .main__contents .player__control .seekbar__panel {
+  position: relative;
   display: flex;
   flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+}
+body main .main__panel .main__contents .player__control .seekbar__panel .seekbar__label {
+  font-family: "BizinGothicDiscord";
+  text-align: center;
+  color: white;
+}
+body main .main__panel .main__contents .player__control .seekbar__panel .seekbar__progress {
+  position: relative;
+  display: flex;
+  width: 50%;
+  height: 0.5rem;
+  max-width: 400px;
+  background: #1c2b3a;
+  border-radius: 0.5rem;
+  margin-block: 1rem;
+  pointer-events: none;
+}
+body main .main__panel .main__contents .player__control .seekbar__panel .seekbar__progress .seekbar__bar {
+  width: 0;
+  height: 100%;
+  background: linear-gradient(to right, #ff4b8b, #ffcc70);
+  border-radius: 0.5rem;
+}
+body main .main__panel .main__contents .player__control .seekbar__panel .seekbar__progress .thumb {
+  width: 1rem;
+  height: 1rem;
+  background: white;
+  border-radius: 50%;
+  position: absolute;
+  top: 50%;
+  left: 0;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 2px 5px rgba 255, 255, 255, 0.5;
+  pointer-events: none;
+}
+body main .main__panel .main__contents .player__control .volume__panel {
+  display: flex;
+  justify-content: center;
   align-items: center;
 }
-body main nav .tabs__list__leftedge .tabs__list__bottom .me__tabs__list {
-  display: block;
+body main .main__panel .main__contents .player__control .volume__panel .volume__progress {
+  width: 50%;
+  max-width: 200px;
+  background: #1c2b3a;
+  border-radius: 0.5rem;
+  margin: 0 1rem;
 }
-body main nav .tabs__list__leftedge .tabs__list__bottom .server__tabs__list {
-  display: none;
+body main .main__panel .main__contents .player__control .buttons__panel {
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
-body main nav .tabs__list__leftedge .tabs__list__bottom .tab__button {
-  width: calc(100% - 1rem);
-  margin: 1px 0.5rem;
+body main .main__panel .main__contents .player__control .buttons__panel button {
+  width: 3rem;
+  height: 3rem;
+  margin: 0.5rem;
   padding: 0.5rem;
-  padding-left: 0.75rem;
+  border: none;
+  border-radius: 50%;
+  background: linear-gradient(#ff4b8b, #ff758c);
+  box-shadow: 0 0 1rem 0.5rem rgba(0, 0, 0, 0.2);
+  display: flex;
+  justify-content: center;
+  align-items: center;
   color: white;
-  font-family: "BizinGothicDiscord", sans-serif;
-  font-size: 1rem;
-  text-align: left;
-  border: #2b2d31 solid 1px;
-  border-radius: 0.25rem;
-  background-color: #2b2d31;
-  transition: background-color 0.3s, border 0.6s;
+  font-size: 1.5rem;
 }
-body main nav .tabs__list__leftedge .tabs__list__bottom .tab__button:hover {
+body main .main__panel .main__contents .player__control .buttons__panel button:hover {
+  filter: brightness(1.2);
   cursor: pointer;
-  background-color: #5d5f68;
+  border: 2px solid white;
 }
-body main nav .tabs__list__leftedge .tabs__list__bottom .tab__button:active {
-  background-color: #6d707b;
+body main .main__panel .main__contents .player__control .buttons__panel button:active {
+  filter: brightness(0.8);
+  transform: scale(0.96);
 }
-body main .main__panel__content {
-  width: calc(100vw - 312px);
-  height: calc(100vh - 60px);
-  background-color: #313338;
+@media screen and (max-width: 1200px) {
+  body main .main__panel .main__contents .player__control .buttons__panel button {
+    width: 2.5rem;
+    height: 2.5rem;
+    margin: 0.25rem;
+  }
+}
+@media screen and (max-width: 1200px) {
+  body main .main__panel .main__contents .player__control {
+    bottom: 6rem;
+  }
+}
+body main .servers {
+  display: flex;
+  justify-content: center;
+  flex-direction: column;
+}
+body main .servers button {
+  width: 4rem;
+  height: 4rem;
+  margin: 1rem;
+  padding: 2px;
+  border: none;
+  border-radius: 50%;
+  background: #3b577b;
+  box-shadow: 0 0 1rem 0.5rem rgba(0, 0, 0, 0.2);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  color: white;
+}
+body main .servers button:hover {
+  filter: brightness(1.2);
+  cursor: pointer;
+  border: 2px solid white;
+}
+body main .servers button:active {
+  filter: brightness(0.8);
+  transform: scale(0.96);
+}
+body main .servers button .server__icon {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+}
+body main .servers button.active {
+  border: 2px solid #ff207d;
+}
+@media screen and (max-width: 1200px) {
+  body main .servers {
+    display: none;
+  }
 }

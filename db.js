@@ -33,6 +33,16 @@ class DB {
         connect();
         // this.endAsync = util.promisify(this.connection.end).bind(this.connection);
         const guilds = {
+            get: async (guild_id) => {
+                const resData = await this.exec(`SELECT * FROM guilds WHERE guild_id = '${guild_id}'`);
+                return resData[0] ?? null;
+            },
+            set: async (guild_id, { options, queue, history, volume }) => {
+                const optionsString = JSON.stringify(options);
+                const queueString = JSON.stringify(queue);
+                const historyString = JSON.stringify(history);
+                return await this.exec(`INSERT INTO guilds (guild_id, options, queue, history, volume) VALUES (${guild_id}, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE options = ?, queue = ?, history = ?, volume = ?`, [optionsString, queueString, historyString, volume, optionsString, queueString, historyString, volume]);
+            },
             options: {
                 get: async (guild_id) => {
                     const resData = await this.exec(`SELECT options FROM guilds WHERE guild_id = '${guild_id}'`);
@@ -76,6 +86,34 @@ class DB {
                 }
             }
         }
+        const clients = {
+            get: async (user_id) => {
+                const resData = await this.exec(`SELECT * FROM clients WHERE client_id = '${user_id}'`);
+                return resData[0] ?? null;
+            },
+            set: async (user_id, { kokoneToken, username, globalName, avatar }) => {
+                return await this.exec(`INSERT INTO clients (client_id, token, user_name, global_name, avatar_url) VALUES ('${user_id}', '${kokoneToken}', ?, ?, ?) ON DUPLICATE KEY UPDATE token = '${kokoneToken}', user_name = ?, global_name = ?, avatar_url = ?`, [username, globalName, avatar, username, globalName, avatar]);
+            },
+            delete: async (user_id) => {
+                return await this.exec(`DELETE FROM clients WHERE client_id = '${user_id}'`);
+            },
+            options: {
+                get: async (user_id) => {
+                    const resData = await this.exec(`SELECT options FROM clients WHERE client_id = '${user_id}'`);
+                    return resData[0] && resData[0].options ? resData[0].options : {};
+                },
+                set: async (user_id, options) => {
+                    const optionsString = JSON.stringify(options);
+                    return await this.exec(`INSERT INTO clients (client_id, options) VALUES ('${user_id}', ?) ON DUPLICATE KEY UPDATE options = ?`, [optionsString, optionsString]);
+                }
+            },
+            token: {
+                get: async (user_id) => {
+                    const resData = await this.exec(`SELECT token FROM clients WHERE client_id = '${user_id}'`);
+                    return resData[0] && resData[0].token ? resData[0].token : null;
+                }
+            }
+        }
         const videoCache = {
             get: async (video_id) => {
                 const resData = await this.exec(`SELECT * FROM videoCache WHERE video_id = '${video_id}'`);
@@ -87,6 +125,7 @@ class DB {
             }
         }
         this.guilds = guilds;
+        this.clients = clients;
         this.videoCache = videoCache;
     }
 

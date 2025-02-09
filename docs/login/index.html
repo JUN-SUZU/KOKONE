@@ -19,6 +19,17 @@
     <link rel="stylesheet" type="text/css" href="../css/reset.css">
     <link rel="stylesheet" type="text/css" href="../css/base.css">
     <link rel="stylesheet" type="text/css" href="../css/contents.css">
+    <style>
+        #error {
+            color: white;
+            background-image: linear-gradient(#ffeb3b 0%, #ffa33b 100%);
+            background-size: 100% 2px;
+            background-position: 0 100%;
+            background-repeat: no-repeat;
+            margin: 1rem;
+            display: none;
+        }
+    </style>
 </head>
 
 <body>
@@ -29,7 +40,9 @@
     </header>
     <main>
         <section>
-            <a href="https://discord.com/oauth2/authorize?client_id=1188932280505335849&response_type=code&redirect_uri=https%3A%2F%2Fkokone.jun-suzu.net%2Flogin%2F&scope=identify+guilds" target="_blank">Discordでログイン</a>
+            <a href="https://discord.com/oauth2/authorize?client_id=1188932280505335849&response_type=code&redirect_uri=https%3A%2F%2Fkokone.jun-suzu.net%2Flogin%2F&scope=identify+guilds"
+                target="_blank">Discordでログイン</a>
+            <p id="error"></p>
         </section>
     </main>
     <footer>
@@ -49,5 +62,6 @@
     </footer>
 
 </body>
+<script src="./login.js"></script>
 
 </html>

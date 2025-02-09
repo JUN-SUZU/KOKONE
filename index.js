@@ -24,12 +24,14 @@ const ytdl = require('@distube/ytdl-core');
 
 // dashboard
 const http = require('http');
+const WebSocket = require('ws');
 
 // other modules
 const fs = require('fs');
 const path = require('path');
 const cron = require('node-cron');
 const { on } = require('events');
+const { type } = require('node:os');
 const wait = require('node:timers/promises').setTimeout;
 const baseColor = '#ff207d';
 
@@ -48,6 +50,7 @@ const client = new Client({
 
 client.isSkip = new Collection();
 let searchCache = JSON.parse(fs.readFileSync('./searchCache.json', 'utf8'));
+let playingTime = {};
 
 client.once('ready', async () => {
     console.log(`Logged in as ${client.user.tag}`);
@@ -273,19 +276,33 @@ client.on('interactionCreate', async (interaction) => {
             }
             if (repeatTimes > 1000) repeatTimes = 1000;
             const queue = await db.guilds.queue.get(interaction.guild.id);
+            let musictoRepeat;
             if (!queue.length) {
-                return await interaction.reply({
-                    content: 'No music is playing.\n音楽が再生されていません。',
-                    ephemeral: true
-                });
+                const history = await db.guilds.history.get(interaction.guild.id);
+                if (!history.length) {
+                    return await interaction.reply({
+                        content: 'No music has been played even once.\n一度も音楽が再生されていません。',
+                        ephemeral: true
+                    });
+                }
+                const lastMusic = history[history.length - 1];
+                musictoRepeat = { videoId: lastMusic, messageChannel: interaction.channelId };
             }
-            const playingMusic = queue[0];
-            playingMusic.user = interaction.member.user.username;
+            else {
+                musictoRepeat = queue[0];
+            }
+            musictoRepeat.user = interaction.member.user.username;
             for (let i = 0; i < repeatTimes; i++) {
-                queue.unshift(playingMusic);
+                queue.unshift(musictoRepeat);
             }
             await db.guilds.queue.set(interaction.guild.id, queue);
-            await interaction.reply(`Set to repeat ${repeatTimes} times.\n${repeatTimes}回リピートするように設定しました。${repeatTimes == 1000 ? '（上限）' : ''}`);
+            if (onPlaying(interaction.guild.id)) {
+                await interaction.reply(`Set to repeat ${repeatTimes} times.\n${repeatTimes}回リピートするように設定しました。${repeatTimes == 1000 ? '（上限）' : ''}`);
+            }
+            else {
+                await interaction.reply(`Set to encore ${repeatTimes} times.\n${repeatTimes}回アンコールするように設定しました。${repeatTimes == 1000 ? '（上限）' : ''}`);
+                joinAndReply(interaction);
+            }
         }
         else if (commandName === 'volume') {
             const volume = interaction.options.getNumber('volume');
@@ -602,6 +619,8 @@ async function playMusic(connection, videoId, guildId) {
             quality: 'highestaudio',
             highWaterMark: 32 * 1024 * 1024
         });
+        const musicLength = await ytdl.getBasicInfo(videoId).then(info => info.videoDetails.lengthSeconds);
+        playingTime[guildId] = { startTime: Date.now(), musicLength: musicLength };
     }
 
     const resource = createAudioResource(stream, {
@@ -620,6 +639,7 @@ async function playMusic(connection, videoId, guildId) {
             if (client.isSkip.get(guildId)) return client.isSkip.delete(guildId);
             let queue = await db.guilds.queue.get(guildId);
             queue.shift();
+            delete playingTime[guildId];
             if (queue.length) {
                 await db.guilds.queue.set(guildId, queue);
                 await wait(2000);// 余韻のために2秒待つ
@@ -680,90 +700,203 @@ const server = http.createServer((req, res) => {
     }
     const url = req.url.replace(/\?.*$/, ''), method = req.method, ipadr = getIPAddress(req), now = new Date().toLocaleString();
     fs.appendFileSync('./log.txt', `${now} ${method} ${url} ${ipadr}\n`, 'utf8');
-    if (method === 'OPTIONS') {
-        res.writeHead(200, {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'POST',
-            'Access-Control-Allow-Headers': 'Content-Type',
-            'Content-Type': 'application/json'
-        });
-        res.end();
-        return;
-    }
     if (method != 'POST') return;
     let body = '';
     req.on('data', (chunk) => {
         body += chunk;
     });
-    req.on('end', () => {
-        try {
-            const data = JSON.parse(body);
-            if (url === '/login/api/') {
-
-                async function getDiscordToken(code) {
-                    const data = {
-                        client_id: config.clientID,
-                        client_secret: config.clientSecret,
-                        grant_type: 'authorization_code',
-                        code: code,
-                        redirect_uri: config.url + '/login/',
-                        scope: 'identify email'
-                    };
-                    const options = {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded',
-                        },
-                        body: new URLSearchParams(data),
-                    };
-                    const response = await fetch('https://discord.com/api/oauth2/token', options);
-                    const json = await response.json();
-                    return json.access_token;
-                }
-
-                async function getUserData(token) {
-                    const options = {
-                        headers: {
-                            Authorization: `Bearer ${token}`
-                        }
-                    };
-                    const response = await fetch('https://discord.com/api/users/@me', options);
-                    return await response.json();
-                }
-
-                getDiscordToken(data.code).then((token) => {
-                    getUserData(token).then((user) => {
-                        if (!user.id) {
-                            res.writeHead(403, { 'Content-Type': 'application/json' });
-                            res.end(JSON.stringify({ result: 'fail' }));
-                            return;
-                        }
-                        let kokoneToken = Math.random().toString(36).slice(-8);
-                        // TODO: MySQLにデータを保存 accountData をMySQLに保存
-                        // if (!accountData[user.id]) {
-                        //     accountData[user.id] = {
-                        //         username: user.username,
-                        //         globalName: user["global_name"],
-                        //         avatar: `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`,
-                        //         verified: user.verified,
-                        //         token: kokoneToken
-                        //     };
-                        // }
-                        res.writeHead(200, { 'Content-Type': 'application/json' });
-                        res.end(JSON.stringify({ result: 'success', userID: user.id, token: kokoneToken }));
-                    });
-                }).catch((e) => {
-                    res.writeHead(403, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ result: 'fail' }));
-                });
+    req.on('end', async () => {
+        if (url === '/auth/api/') {
+            const { userID, kokoneToken } = parseCookies(req);
+            if (!userID || !kokoneToken) {
+                res.writeHead(403, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ result: 'fail' }));
+                return;
             }
+            const user = await db.clients.get(userID);
+            if (user && user.token === kokoneToken) {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ result: 'success', username: user.username, globalName: user.globalName, avatar: user.avatar }));
+            }
+            else {
+                res.writeHead(403, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ result: 'fail' }));
+            }
+        }
+        else {
+            try {
+                const data = JSON.parse(body);
+                if (url === '/login/api/') {
+                    async function getDiscordToken(code) {
+                        const data = {
+                            client_id: config.clientID,
+                            client_secret: config.clientSecret,
+                            grant_type: 'authorization_code',
+                            code: code,
+                            redirect_uri: config.url + '/login/',
+                            scope: 'identify email'
+                        };
+                        const options = {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/x-www-form-urlencoded',
+                            },
+                            body: new URLSearchParams(data),
+                        };
+                        const response = await fetch('https://discord.com/api/oauth2/token', options);
+                        const json = await response.json();
+                        return json.access_token;
+                    }
+                    async function getUserData(token) {
+                        const options = {
+                            headers: {
+                                Authorization: `Bearer ${token}`
+                            }
+                        };
+                        const response = await fetch('https://discord.com/api/users/@me', options);
+                        return await response.json();
+                    }
+                    getDiscordToken(data.code).then((token) => {
+                        getUserData(token).then(async (user) => {
+                            if (!user.id) {
+                                res.writeHead(403, { 'Content-Type': 'application/json' });
+                                res.end(JSON.stringify({ result: 'fail' }));
+                                return;
+                            }
+                            // ランダムな16文字の文字列を生成
+                            let kokoneToken = await db.clients.token.get(user.id);
+                            if (!kokoneToken) kokoneToken = [...Array(16)].map(() => Math.random().toString(36)[2]).join('');
+                            db.clients.set(user.id, {
+                                kokoneToken: kokoneToken,
+                                username: user.username,
+                                globalName: user.global_name,
+                                avatar: `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`
+                            });
+                            // res.writeHead(200, resHeader);
+                            // res.end(JSON.stringify({ result: 'success', userID: user.id, token: kokoneToken }));
+                            res.writeHead(200, {
+                                'Content-Type': 'application/json',
+                                'Set-Cookie': [
+                                    `userID=${user.id}; Max-Age=604800; Secure; HttpOnly; SameSite=None; Domain=.jun-suzu.net; Path=/`,
+                                    `kokoneToken=${kokoneToken}; Max-Age=604800; Secure; HttpOnly; SameSite=None; Domain=.jun-suzu.net; Path=/`
+                                ]
+                            });
+                            res.end(JSON.stringify({ result: 'success' }));
+                        });
+                    }).catch((e) => {
+                        res.writeHead(403, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ result: 'fail' }));
+                    });
+                }
+            } catch (error) {
+                // return no error or message
+                console.log('Bad request received.', ipadr);
+                return;
+            }
+        }
+    });
+});
+
+const wsServer = new WebSocket.Server({ server });
+
+wsServer.on('connection', (ws, request) => {
+    const ipadr = request.headers['x-forwarded-for'].split(/\s*,\s*/)[0];
+    ws.on('message', async (message) => {
+        try {
+            const data = JSON.parse(message);
+            const { userID, kokoneToken } = parseCookies(request);
+            if (!userID || !kokoneToken) return;
+            const user = await db.clients.get(userID);
+            if (!user || user.token !== kokoneToken) return;
+            if (data.action === 'greeting') {
+                // 挨拶があった場合、挨拶を返し、必要な情報を送信
+                ws.send(JSON.stringify({ type: 'response', action: 'greeting', details: 'Hello, This is KOKONE Server.' }));
+                // ユーザーの設定を送信
+                const userSettings = await db.clients.options.get(userID);
+                ws.send(JSON.stringify({ type: 'response', action: 'getUserSettings', details: userSettings }));
+                // 所属しているサーバーのidと名前とアイコンを送信
+                const guilds = client.guilds.cache.filter(guild => guild.members.cache.has(userID)).map(guild => {
+                    return {
+                        id: guild.id,
+                        name: guild.name,
+                        icon: guild.iconURL({ extension: 'png', size: 128 }),
+                        playing: onPlaying(guild.id)
+                    };
+                });
+                console.log(guilds);
+                if (!guilds.length) ws.send(JSON.stringify({ type: 'response', action: 'getGuilds', details: [] }));
+                ws.send(JSON.stringify({ type: 'response', action: 'getGuilds', details: guilds }));
+            }
+            else if (data.action === 'getGuildData') {
+                const guild = client.guilds.cache.get(data.guildID);
+                if (!guild) {
+                    ws.send(JSON.stringify({ result: 'getGuildData', error: 'Guild not found.' }));
+                    return;
+                }
+                // dbから取得したすべてのデータと、playingTimeを送信
+                const guildData = await db.guilds.get(guild.id);
+                guildData.playingTime = playingTime[guild.id] || {};
+                ws.send(JSON.stringify({ type: 'response', action: 'getGuildData', details: guildData }));
+            }
+            else if (data.action === 'getVideoData') {
+                const videoData = await db.videoCache.get(data.videoID);
+                videoData.flag = data.flag;
+                ws.send(JSON.stringify({ type: 'response', action: 'getVideoData', details: videoData }));
+            }
+            else if (data.action === 'controlPlayer') {
+                const guild = client.guilds.cache.get(data.guildID);
+                if (!guild) {
+                    ws.send(JSON.stringify({ type: 'response', action: 'controlPlayer', error: 'Guild not found.' }));
+                    return;
+                }
+                const connection = getVoiceConnection(data.guildID);
+                if (!connection) {
+                    ws.send(JSON.stringify({ type: 'response', action: 'controlPlayer', error: 'Not connected to voice channel.' }));
+                    return;
+                }
+                const player = connection.state.subscription.player;
+                if (data.control === 'play') player.unpause();
+                else if (data.control === 'pause') player.pause();
+                else if (data.control === 'stop') {
+                    player.stop();
+                    db.guilds.queue.set(guild.id, []);
+                }
+                else if (data.control === 'skip') player.stop();
+                else if (data.control === 'shuffle') {
+                    const queue = await db.guilds.queue.get(guild.id);
+                    if (queue.length < 2) {
+                        ws.send(JSON.stringify({ type: 'response', action: 'controlPlayer', error: 'There are no music in the queue or only one music.' }));
+                        return;
+                    }
+                    const playingMusic = queue.shift();
+                    let shuffledQueue = [playingMusic];
+                    const queueLength = queue.length;
+                    for (let i = 0; i < queueLength; i++) {
+                        const randomIndex = Math.floor(Math.random() * queue.length);
+                        shuffledQueue.push(queue[randomIndex]);
+                        queue.splice(randomIndex, 1);
+                    }
+                    await db.guilds.queue.set(guild.id, shuffledQueue);
+                }
+                else if (data.control === 'volume') {
+                    player.state.resource.volume.setVolume(data.value / 100);
+                    db.guilds.volume.set(guild.id, data.value);
+                }
+                ws.send(JSON.stringify({ type: 'response', action: 'controlPlayer', details: 'Success' }));
+            }
+            // お気に入りリストの取得
         } catch (error) {
-            // return no error or message
             console.log('Bad request received.', ipadr);
+            console.log(error);
             return;
         }
     });
 });
+
+function parseCookies(req) {
+    const cookieHeader = req.headers.cookie || '';
+    return Object.fromEntries(cookieHeader.split('; ').map(c => c.split('=')));
+}
 
 client.login(config.token);
 server.listen(config.httpPort, () => {

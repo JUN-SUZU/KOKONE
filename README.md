@@ -33,21 +33,6 @@ VOICEVOX冥鳴ひまり(話速1.09, 音高0.06, 抑揚0.78)
 tree -n -I "node_modules" . -o structure
 ```
 
-## MySQL
-
-```sql
-mysql> DESC guilds;
-+----------+-------------+------+-----+---------+-------+
-| Field    | Type        | Null | Key | Default | Extra |
-+----------+-------------+------+-----+---------+-------+
-| guild_id | varchar(20) | NO   | PRI | NULL    |       |
-| options  | json        | YES  |     | NULL    |       |
-| volume   | double      | YES  |     | 30      |       |
-| queue    | json        | YES  |     | NULL    |       |
-| history  | json        | YES  |     | NULL    |       |
-+----------+-------------+------+-----+---------+-------+
-```
-
 ## ライセンス
 
 MIT ライセンスです。

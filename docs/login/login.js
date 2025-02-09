@@ -1,8 +1,24 @@
-let userID = localStorage.getItem('userID');
-let token = localStorage.getItem('token');
-if (userID && token) {
-    window.location.href = '/dashboard/';
-}
+if (window.top !== window.self) document.body.innerHTML = "";
+fetch('https://dashboard.kokone.jun-suzu.net/auth/api/', {
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json',
+    },
+    credentials: 'include',
+}).then((res) => {
+    if (res.status === 200) {
+        res.json().then((data) => {
+            if (data.result === 'success') {
+                document.getElementById('error').innerText = 'ログインに成功しました。3秒後にリダイレクトします。';
+                setTimeout(() => {
+                    window.location.href = '/dashboard/';
+                }, 3000);
+            }
+        });
+    } else {
+        console.error('Failed to authenticate. Continue to login with Discord.');
+    }
+});
 // GETのパラメータを取得
 let url = new URL(window.location.href);
 let code = url.searchParams.get('code');
@@ -16,13 +32,14 @@ if (code) {
             'Content-Type': 'application/json',
         },
         body: JSON.stringify({ code: code }),
+        credentials: 'include',
     };
     fetch('https://dashboard.kokone.jun-suzu.net/login/api/', options).then((res) => {
         if (res.status === 200) {
             res.json().then((data) => {
                 if (data.result === 'success') {
-                    localStorage.setItem('userID', data.userID);
-                    localStorage.setItem('token', data.token);
+                    // localStorage.setItem('dAccount', JSON.stringify({ dId: data.userID, dToken: data.token }));
+                    // set cookie dId only
                     document.getElementById('error').innerText = 'ログインに成功しました。3秒後にリダイレクトします。';
                     setTimeout(() => {
                         window.location.href = '/dashboard/';

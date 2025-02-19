@@ -220,7 +220,7 @@ client.on('interactionCreate', async (interaction) => {
                     if (error) {
                         console.log(`error has occurred while searching: ${keyword}`);
                         // .errorフォルダ内に新しいファイルを作成し、エラー内容を書き込む
-                        fs.writeFileSync(`./error/error_${new Date().toLocaleString().replace(/\/|:|\s/g, '_')}.txt`, error, 'utf8');
+                        fs.writeFileSync(`./.error/error_${new Date().toLocaleString().replace(/\/|:|\s/g, '_')}.txt`, error, 'utf8');
                         interaction.editReply({
                             content: 'An error has occurred while searching.\n検索中にエラーが発生しました。',
                             ephemeral: true

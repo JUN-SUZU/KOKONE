@@ -7,7 +7,7 @@ const TITLE_TO_CATEGORY = {
   song: { name: "Music", url: "https://music.youtube.com/" },
 };
 
-const getText = obj => (obj ? (obj.runs ? obj.runs[0].text : obj.simpleText) : null);
+const getText = obj => obj?.runs?.[0]?.text ?? obj?.simpleText;
 
 /**
  * Get video media.

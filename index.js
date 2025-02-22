@@ -219,10 +219,8 @@ client.on('interactionCreate', async (interaction) => {
                 youtube.search(query, 4, async function (error, result) {
                     if (error) {
                         console.log(`error has occurred while searching: ${keyword}`);
-                        // .errorフォルダ内に新しいファイルを作成し、エラー内容を書き込む
-                        fs.writeFileSync(`./.error/error_${new Date().toLocaleString().replace(/\/|:|\s/g, '_')}.txt`, error, 'utf8');
                         interaction.editReply({
-                            content: 'An error has occurred while searching.\n検索中にエラーが発生しました。',
+                            content: 'An error has occurred while searching.\n検索中にエラーが発生しました。\nPlease try again with a different keyword.\n別のキーワードで再度お試しください。',
                             ephemeral: true
                         });
                     }
@@ -316,12 +314,16 @@ client.on('interactionCreate', async (interaction) => {
             if (onPlaying(interaction.guild.id)) {
                 const resource = getVoiceConnection(interaction.guild.id).state.subscription.player.state.resource;
                 let currentVolume = await db.guilds.volume.get(interaction.guild.id);
-                while (currentVolume != volume) {
-                    let diff = volume - currentVolume > 5 ? 5 : volume - currentVolume < -5 ? -5 : volume - currentVolume;
-                    currentVolume += diff;
-                    if (currentVolume - volume > -0.5 && currentVolume - volume < 0.5) currentVolume = volume;
-                    resource.volume.setVolume(currentVolume / 100);
-                    await wait(200);
+                try {
+                    while (currentVolume != volume) {
+                        let diff = volume - currentVolume > 5 ? 5 : volume - currentVolume < -5 ? -5 : volume - currentVolume;
+                        currentVolume += diff;
+                        if (currentVolume - volume > -0.5 && currentVolume - volume < 0.5) currentVolume = volume;
+                        resource.volume.setVolume(currentVolume / 100);
+                        await wait(200);
+                    }
+                } catch (error) {
+                    console.log(error);
                 }
             }
             db.guilds.volume.set(interaction.guild.id, volume);

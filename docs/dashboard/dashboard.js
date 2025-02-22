@@ -1,5 +1,5 @@
 if (window.top !== window.self) document.body.innerHTML = "";
-let { username, globalName, avatar } = {};
+let userData = {};
 fetch('https://dashboard.kokone.jun-suzu.net/auth/api/', {
     method: 'POST',
     headers: {
@@ -11,9 +11,7 @@ fetch('https://dashboard.kokone.jun-suzu.net/auth/api/', {
         res.json().then((data) => {
             if (data.result === 'success') {
                 console.log('Logged in successfully.');
-                username = data.username;
-                globalName = data.globalName;
-                avatar = data.avatar;
+                userData = { username: data.username, globalName: data.globalName, avatar: data.avatar };
             } else {
                 console.error('Failed to authenticate. Continue to login with Discord.');
                 window.location.href = 'https://kokone.jun-suzu.net/login/';
@@ -27,7 +25,6 @@ fetch('https://dashboard.kokone.jun-suzu.net/auth/api/', {
 
 let selectedGuild = 0;
 let guilds = [];
-let playingTime = {};
 let handlers = {};
 
 // connect to the server using WebSocket
@@ -74,20 +71,7 @@ const connectWebSocket = () => {
             document.getElementById('volumeLabel').innerText = "音量: " + guildData.volume + "%";
             if (guilds[selectedGuild].playing) {
                 document.getElementById('mcover').src = `https://img.youtube.com/vi/${guildData.queue[0].videoId}/default.jpg`;
-                if (handlers.playingTime) clearInterval(handlers.playingTime);
-                playingTime = guildData.playingTime;
-                handlers.playingTime = setInterval(() => {
-                    const now = new Date().getTime();
-                    const elapsed = now - playingTime.startTime;
-                    const percentage = elapsed / playingTime.musicLength / 10;
-                    if (percentage > 100) {
-                        clearInterval(handlers.playingTime);
-                        return;
-                    }
-                    document.getElementById('seekbarLine').style.width = percentage + '%';
-                    document.getElementById('seekbarThumb').style.left = percentage + '%';
-                    document.getElementById('seekbarTime').innerText = `再生位置: ${Math.floor(elapsed / 60000)}:${("00" + Math.floor(elapsed / 1000) % 60).slice(-2)}`;
-                }, 500);
+                refreshSeekbar(guildData.playingTime);
             }
             socket.send(JSON.stringify({ action: 'getVideoData', videoID: guildData.queue[0].videoId, flag: 'playing' }));
         }
@@ -145,9 +129,20 @@ class controlButtonEvent {
 new controlButtonEvent();
 
 // refresh seekbar
-async function refreshSeekbar() {
-    setTimeout(() => {
-    }, 1000);
+function refreshSeekbar(playingTime) {
+    if (handlers.playingTime) clearInterval(handlers.playingTime);
+    handlers.playingTime = setInterval(() => {
+        const now = new Date().getTime();
+        const elapsed = now - playingTime.startTime;
+        const percentage = elapsed / playingTime.musicLength / 10;
+        if (percentage > 100) {
+            clearInterval(handlers.playingTime);
+            return;
+        }
+        document.getElementById('seekbarLine').style.width = percentage + '%';
+        document.getElementById('seekbarThumb').style.left = percentage + '%';
+        document.getElementById('seekbarTime').innerText = `再生位置: ${Math.floor(elapsed / 60000)}:${("00" + Math.floor(elapsed / 1000) % 60).slice(-2)}`;
+    }, 500);
 }
 
 

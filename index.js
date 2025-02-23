@@ -110,71 +110,379 @@ client.on('interactionCreate', async (interaction) => {
     let log = `Interaction: ${interaction.user.tag} in #${interaction.channel.name} (${interaction.channel.id}) triggered an interaction.\n`
         + `TimeStamp: ${new Date().toLocaleString()}\n`
         + `Guild: ${interaction.guild.name} (${interaction.guild.id})\n`;
-    if (interaction.isChatInputCommand()) {
-        const commandName = interaction.commandName;
-        log += `Command: ${commandName}\n`
-            + `Options: ${interaction.options.data.map(option => `${option.name}: ${option.value}`).join(', ')}\n`;
-        fs.appendFileSync('./log.txt', log, 'utf8');
-        // get permission of the text channel
-        const permissions = interaction.channel.permissionsFor(client.user);
-        if (!permissions ||
-            !permissions.has(PermissionsBitField.Flags.SendMessages) ||
-            !permissions.has(PermissionsBitField.Flags.ViewChannel) ||
-            !permissions.has(PermissionsBitField.Flags.EmbedLinks) ||
-            !permissions.has(PermissionsBitField.Flags.AttachFiles)) {
-            return await interaction.reply({
-                content: 'I don\'t have permission to send messages in this channel.\nこのチャンネルでメッセージを送信する権限がありません。',
-                ephemeral: true
-            });
-        }
-        if (commandName === 'play') {
-            // get voice channel
-            const voiceChannel = interaction.member.voice.channel;
-            if (!voiceChannel) {
+    try {
+        if (interaction.isChatInputCommand()) {
+            const commandName = interaction.commandName;
+            log += `Command: ${commandName}\n`
+                + `Options: ${interaction.options.data.map(option => `${option.name}: ${option.value}`).join(', ')}\n`;
+            fs.appendFileSync('./log.txt', log, 'utf8');
+            // get permission of the text channel
+            const permissions = interaction.channel.permissionsFor(client.user);
+            if (!permissions ||
+                !permissions.has(PermissionsBitField.Flags.SendMessages) ||
+                !permissions.has(PermissionsBitField.Flags.ViewChannel) ||
+                !permissions.has(PermissionsBitField.Flags.EmbedLinks) ||
+                !permissions.has(PermissionsBitField.Flags.AttachFiles)) {
                 return await interaction.reply({
-                    content: 'You need to be in a voice channel to play music!\nあなたは音声チャンネルに参加している必要があります。',
+                    content: 'I don\'t have permission to send messages in this channel.\nこのチャンネルでメッセージを送信する権限がありません。',
                     ephemeral: true
                 });
             }
-            const voiceChannelPermissions = voiceChannel.permissionsFor(client.user);
-            if (!voiceChannelPermissions.has(PermissionsBitField.Flags.Connect) ||
-                !voiceChannelPermissions.has(PermissionsBitField.Flags.Speak) ||
-                !voiceChannelPermissions.has(PermissionsBitField.Flags.ViewChannel)) {
-                return await interaction.reply({
-                    content: 'I don\'t have permission to join or speak in this channel.\nこのチャンネルに参加または発言する権限がありません。',
-                    ephemeral: true
-                });
+            if (commandName === 'play') {
+                // get voice channel
+                const voiceChannel = interaction.member.voice.channel;
+                if (!voiceChannel) {
+                    return await interaction.reply({
+                        content: 'You need to be in a voice channel to play music!\nあなたは音声チャンネルに参加している必要があります。',
+                        ephemeral: true
+                    });
+                }
+                const voiceChannelPermissions = voiceChannel.permissionsFor(client.user);
+                if (!voiceChannelPermissions.has(PermissionsBitField.Flags.Connect) ||
+                    !voiceChannelPermissions.has(PermissionsBitField.Flags.Speak) ||
+                    !voiceChannelPermissions.has(PermissionsBitField.Flags.ViewChannel)) {
+                    return await interaction.reply({
+                        content: 'I don\'t have permission to join or speak in this channel.\nこのチャンネルに参加または発言する権限がありません。',
+                        ephemeral: true
+                    });
+                }
+                await interaction.deferReply({ ephemeral: true });
+                // search video id
+                const keyword = interaction.options.getString('keyword');
+                let query = keyword.replace(/"/g, '');
+                if (query.match(/^(https?:\/\/)?((music|www)\.)?youtube\.com\/watch(\/\?|\?)v=([a-zA-Z0-9_-]{11})/) ||
+                    query.match(/^(https?:\/\/)?((music|www)\.)?youtu\.be\/([a-zA-Z0-9_-]{11})/) ||
+                    query.match(/^(https?:\/\/)?((music|www)\.)?youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/)) {
+                    let videoId = ytdl.getVideoID(query);
+                    if (!videoId) {
+                        return interaction.editReply({
+                            content: 'Invalid URL.\nURLが無効です。',
+                            ephemeral: true
+                        });
+                    }
+                    else if (!await addVideoCache(videoId)) {
+                        return interaction.editReply({
+                            content: 'The music could not be found.\n曲が見つかりませんでした。',
+                            ephemeral: true
+                        });
+                    }
+                    // add to queue
+                    const queue = await db.guilds.queue.get(interaction.guild.id);
+                    const queueData = { videoId: videoId, messageChannel: interaction.channelId, user: interaction.member.user.username };
+                    queue.push(queueData);
+                    await db.guilds.queue.set(interaction.guild.id, queue);
+                    if (getVoiceConnection(interaction.guild.id)) {
+                        return interaction.editReply({
+                            embeds: [
+                                new EmbedBuilder()
+                                    .setTitle(`${interaction.member.user.username} added to queue.\nキューに追加されました。`)
+                                    .setImage(`https://img.youtube.com/vi/${videoId}/default.jpg`)
+                                    .setColor(baseColor)
+                            ],
+                            ephemeral: true
+                        });
+                    }
+                    joinAndReply(interaction);
+                }
+                // https://music.youtube.com/playlist?list=RDCLAK5uy_lQtAkCG1Gb8Dkx8lCMFTF-WhrX2rTzTAk
+                // listidの長さはそれぞれ異なるので、list以降を全て取得し、&があれば&より前を取得
+                else if (query.match(/^(https?:\/\/)?((music|www)\.)?youtube\.com\/playlist\?list=([a-zA-Z0-9_-]+)/)) {
+                    let playListId = query.match(/list=([a-zA-Z0-9_-]+)/)[1].split('&')[0];
+                    let playList = await ytpl(playListId);
+                    // add to queue
+                    let queue = await db.guilds.queue.get(interaction.guild.id);
+                    const videoCachePromises = playList.items.map(item => {
+                        queue.push({
+                            videoId: item.id,
+                            messageChannel: interaction.channelId,
+                            user: interaction.member.user.username
+                        });
+                        return db.videoCache.set(item.id, item.title, item.author.name);
+                    });
+                    await Promise.all(videoCachePromises);
+                    await db.guilds.queue.set(interaction.guild.id, queue);
+                    if (getVoiceConnection(interaction.guild.id)) {
+                        return interaction.editReply({
+                            embeds: [
+                                new EmbedBuilder()
+                                    .setTitle(`${interaction.member.user.username} added playlist to queue.\nキューにプレイリストが追加されました。`)
+                                    .setImage(`https://img.youtube.com/vi/${playList.items[0].id}/default.jpg`)
+                                    .setColor(baseColor)
+                            ],
+                            ephemeral: true
+                        });
+                    }
+                    joinAndReply(interaction);
+                }
+                else if (searchCache[query]) createSelectMenu(interaction, searchCache[query]);
+                else {
+                    // 検索
+                    youtube.search(query, 4, async function (error, result) {
+                        if (error) {
+                            console.log(`error has occurred while searching: ${keyword}`);
+                            interaction.editReply({
+                                content: 'An error has occurred while searching.\n検索中にエラーが発生しました。\nPlease try again with a different keyword.\n別のキーワードで再度お試しください。',
+                                ephemeral: true
+                            });
+                        }
+                        else if (result.items.length == 0) {
+                            console.log(`no music found: ${keyword}`);
+                            interaction.editReply({
+                                content: 'No music found.\n曲が見つかりませんでした。',
+                                ephemeral: true
+                            });
+                        }
+                        else {
+                            result.items = result.items.filter(item => item.id.kind == "youtube#video");
+                            let options = [];
+                            for (let i = 0; i < result.items.length && i < 6; i++) {
+                                options.push(
+                                    { label: result.items[i].snippet.title, description: result.items[i].snippet.channelTitle, value: result.items[i].id.videoId }
+                                );
+                                await db.videoCache.set(result.items[i].id.videoId, result.items[i].snippet.title, result.items[i].snippet.channelTitle);
+                            }
+                            searchCache[query] = options;
+                            createSelectMenu(interaction, options);
+                        }
+                    });
+                }
             }
-            await interaction.deferReply({ ephemeral: true });
-            // search video id
-            const keyword = interaction.options.getString('keyword');
-            let query = keyword.replace(/"/g, '');
-            if (query.match(/^(https?:\/\/)?((music|www)\.)?youtube\.com\/watch(\/\?|\?)v=([a-zA-Z0-9_-]{11})/) ||
-                query.match(/^(https?:\/\/)?((music|www)\.)?youtu\.be\/([a-zA-Z0-9_-]{11})/) ||
-                query.match(/^(https?:\/\/)?((music|www)\.)?youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/)) {
-                let videoId = ytdl.getVideoID(query);
-                if (!videoId) {
-                    return interaction.editReply({
-                        content: 'Invalid URL.\nURLが無効です。',
+            else if (commandName === 'stop') {
+                const connection = getVoiceConnection(interaction.guild.id);
+                if (connection) connection.destroy();
+                await db.guilds.queue.set(interaction.guild.id, []);
+                await interaction.reply('Stopped playing music.\n音楽の再生を停止しました。');
+            }
+            else if (commandName === 'skip') {
+                if (!onPlaying(interaction.guild.id)) {
+                    return await interaction.reply({
+                        content: 'No music is playing.\n音楽が再生されていません。',
                         ephemeral: true
                     });
                 }
-                else if (!await addVideoCache(videoId)) {
-                    return interaction.editReply({
-                        content: 'The music could not be found.\n曲が見つかりませんでした。',
+                const player = getVoiceConnection(interaction.guild.id).state.subscription.player;
+                if (player.state.status === AudioPlayerStatus.Paused) player.unpause();
+                player.stop();
+                await interaction.reply('Skipped the current song.\n現在の曲をスキップしました。');
+            }
+            else if (commandName === 'repeat') {
+                let repeatTimes = interaction.options.getNumber('times');
+                if (repeatTimes < 1) {
+                    return await interaction.reply({
+                        content: 'The number of times must be at least 1.\n回数は少なくとも1回である必要があります。',
                         ephemeral: true
                     });
                 }
-                // add to queue
+                if (repeatTimes > 1000) repeatTimes = 1000;
                 const queue = await db.guilds.queue.get(interaction.guild.id);
+                let musictoRepeat;
+                if (!queue.length) {
+                    const history = await db.guilds.history.get(interaction.guild.id);
+                    if (!history.length) {
+                        return await interaction.reply({
+                            content: 'No music has been played even once.\n一度も音楽が再生されていません。',
+                            ephemeral: true
+                        });
+                    }
+                    const lastMusic = history[history.length - 1];
+                    musictoRepeat = { videoId: lastMusic, messageChannel: interaction.channelId };
+                }
+                else {
+                    musictoRepeat = queue[0];
+                }
+                musictoRepeat.user = interaction.member.user.username;
+                for (let i = 0; i < repeatTimes; i++) {
+                    queue.unshift(musictoRepeat);
+                }
+                await db.guilds.queue.set(interaction.guild.id, queue);
+                if (onPlaying(interaction.guild.id)) {
+                    await interaction.reply(`Set to repeat ${repeatTimes} times.\n${repeatTimes}回リピートするように設定しました。${repeatTimes == 1000 ? '（上限）' : ''}`);
+                }
+                else {
+                    await interaction.reply(`Set to encore ${repeatTimes} times.\n${repeatTimes}回アンコールするように設定しました。${repeatTimes == 1000 ? '（上限）' : ''}`);
+                    joinAndReply(interaction);
+                }
+            }
+            else if (commandName === 'volume') {
+                const volume = interaction.options.getNumber('volume');
+                if (volume <= 0 || volume > 200) {
+                    return await interaction.reply({
+                        content: '音量は0より大きく200以下である必要があります。\nVolume must be greater than 0 and less than or equal to 100.',
+                        ephemeral: true
+                    });
+                }
+                await interaction.reply(`Volume set to ${volume}%.\n音量を${volume}%に設定しました。`);
+                if (onPlaying(interaction.guild.id)) {
+                    const resource = getVoiceConnection(interaction.guild.id).state.subscription.player.state.resource;
+                    let currentVolume = await db.guilds.volume.get(interaction.guild.id);
+                    while (currentVolume != volume) {
+                        let diff = volume - currentVolume > 5 ? 5 : volume - currentVolume < -5 ? -5 : volume - currentVolume;
+                        currentVolume += diff;
+                        if (currentVolume - volume > -0.5 && currentVolume - volume < 0.5) currentVolume = volume;
+                        resource.volume.setVolume(currentVolume / 100);
+                        await wait(200);
+                    }
+                }
+                db.guilds.volume.set(interaction.guild.id, volume);
+            }
+            else if (commandName === 'history') {
+                const history = await db.guilds.history.get(interaction.guild.id);
+                if (!history || history.length == 0) {
+                    return await interaction.reply({
+                        content: 'No music history.\n音楽の履歴がありません。',
+                        ephemeral: true
+                    });
+                }
+                let embed = new EmbedBuilder()
+                    .setTitle('Music history\n音楽の履歴')
+                    .setDescription('List of the last 10 songs played.\n最後10回に再生された曲のリストです。\n' +
+                        'Please press the button to play the song.\n曲を再生するにはボタンを押してください。')
+                    .setColor(baseColor);
+                for (let i = 0; i < history.length; i++) {
+                    const cacheData = await db.videoCache.get(history[i]);
+                    embed.addFields({ name: `No.${i + 1}`, value: `[${cacheData.video_title}](https://www.youtube.com/watch?v=${history[i]})\nby ${cacheData.channel_title}` });
+                }
+                // add button
+                const options = [];
+                for (let i = 0; i < history.length; i++) {
+                    options.push({ label: `No.${i + 1}`, value: history[i] });
+                }
+                const selectMenu = new StringSelectMenuBuilder()
+                    .setCustomId('musicSelect')
+                    .setMinValues(1)
+                    .setMaxValues(1)
+                    .addOptions(...options);
+                const row = new ActionRowBuilder().addComponents(selectMenu);
+                await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
+            }
+            else if (commandName === 'queue') {
+                const queue = await db.guilds.queue.get(interaction.guild.id);
+                if (!queue.length) {
+                    return await interaction.reply({
+                        content: 'No music in the queue.\nキューに音楽がありません。',
+                        ephemeral: true
+                    });
+                }
+                let embed = new EmbedBuilder()
+                    .setTitle('Music queue\n音楽のキュー')
+                    .setDescription('List of songs in the queue.\nキューに入っている曲のリストです。')
+                    .setColor(baseColor);
+                let size = queue.length > 10 ? 10 : queue.length;
+                for (let i = 0; i < size; i++) {
+                    const cacheData = await db.videoCache.get(queue[i].videoId);
+                    embed.addFields({ name: `No.${i + 1}`, value: `[${cacheData.video_title}](https://www.youtube.com/watch?v=${queue[i].videoId})\nby ${cacheData.channel_title}` });
+                }
+                if (queue.length > 10) {
+                    // embed.setFooter(`There are ${queue.length - 10} more songs in the queue.\nキューにはあと${queue.length - 10}曲あります。`);
+                    embed.setFooter({ text: `There are ${queue.length - 10} more songs in the queue.\nキューにはあと${queue.length - 10}曲あります。` });
+                }
+                await interaction.reply({ embeds: [embed], ephemeral: true });
+            }
+            else if (commandName === 'pause') {
+                const connection = getVoiceConnection(interaction.guild.id);
+                if (!onPlaying(interaction.guild.id)) {
+                    return await interaction.reply({
+                        content: 'No music is playing.\n音楽が再生されていません。',
+                        ephemeral: true
+                    });
+                }
+                const player = connection.state.subscription.player;
+                player.pause();
+                await interaction.reply('Paused the music.\n音楽を一時停止しました。');
+            }
+            else if (commandName === 'resume') {
+                const connection = getVoiceConnection(interaction.guild.id);
+                if (!onPlaying(interaction.guild.id)) {
+                    return await interaction.reply({
+                        content: 'No music is playing.\n音楽が再生されていません。',
+                        ephemeral: true
+                    });
+                }
+                const player = connection.state.subscription.player;
+                player.unpause();
+                await interaction.reply('Resumed the music.\n音楽を再開しました。');
+            }
+            else if (commandName === 'shuffle') {
+                const queue = await db.guilds.queue.get(interaction.guild.id);
+                if (queue.length < 2) {
+                    return await interaction.reply({
+                        content: 'There are no music in the queue or only one music.\nキューに音楽がないか、1曲しかありません。',
+                        ephemeral: true
+                    });
+                }
+                const playingMusic = queue.shift();
+                let shuffledQueue = [playingMusic];
+                const queueLength = queue.length;
+                for (let i = 0; i < queueLength; i++) {
+                    const randomIndex = Math.floor(Math.random() * queue.length);
+                    shuffledQueue.push(queue[randomIndex]);
+                    queue.splice(randomIndex, 1);
+                }
+                await db.guilds.queue.set(interaction.guild.id, shuffledQueue);
+                await interaction.reply('Shuffled the queue.\nキューをシャッフルしました。');
+            }
+            else if (commandName === 'help') {
+                const commandDescriptions = [
+                    { name: 'play', description: '指定した曲を再生します。' },
+                    { name: 'pause', description: '音楽の再生を一時停止します。\n再生を再開するには`/resume`を使用してください。' },
+                    { name: 'resume', description: '音楽の再生を再開します。' },
+                    { name: 'skip', description: '再生中の曲をスキップします。' },
+                    { name: 'stop', description: '音楽の再生を停止します。' },
+                    { name: 'queue', description: '再生予定の曲を表示します。' },
+                    { name: 'repeat', description: '再生中の曲をリピートします。' },
+                    { name: 'history', description: '再生履歴を表示します。' },
+                    { name: 'volume', description: '音量を調整します。' },
+                    { name: 'shuffle', description: 'キューに追加された曲をシャッフルします。' },
+                    { name: 'help', description: 'コマンドの一覧を表示します。' }
+                ];
+                const embed = new EmbedBuilder()
+                    .setTitle('Help\nヘルプ')
+                    .setDescription('Commands that can be used with Kokone.\nKokoneで使用できるコマンドです。')
+                    .addFields(commandDescriptions.map(command => {
+                        return { name: `/${command.name}`, value: command.description };
+                    }))
+                    .setColor(baseColor);
+                await interaction.reply({ embeds: [embed], ephemeral: true });
+            }
+        }
+        else if (interaction.isStringSelectMenu()) {
+            const selectId = interaction.customId;
+            log += `SelectMenu: ${selectId}\n`
+                + `Values: ${interaction.values}\n`;
+            fs.appendFileSync('./log.txt', log, 'utf8');
+            if (selectId === 'musicSelect') {
+                await interaction.deferReply({ ephemeral: true });
+                // get voice channel
+                const voiceChannel = interaction.member.voice.channel;
+                if (!voiceChannel) {
+                    await interaction.editReply({
+                        content: 'You need to be in a voice channel to play music!\nあなたは音声チャンネルに参加している必要があります。',
+                        ephemeral: true
+                    });
+                    return;
+                }
+                if (!voiceChannel.permissionsFor(client.user).has(PermissionsBitField.Flags.Connect) ||
+                    !voiceChannel.permissionsFor(client.user).has(PermissionsBitField.Flags.Speak) ||
+                    !voiceChannel.permissionsFor(client.user).has(PermissionsBitField.Flags.ViewChannel)) {
+                    await interaction.editReply({
+                        content: 'I don\'t have permission to join or speak in this channel.\nこのチャンネルに参加または発言する権限がありません。',
+                        ephemeral: true
+                    });
+                    return;
+                }
+                const videoId = interaction.values[0];
+                // add to queue
+                let queue = await db.guilds.queue.get(interaction.guild.id);
                 const queueData = { videoId: videoId, messageChannel: interaction.channelId, user: interaction.member.user.username };
                 queue.push(queueData);
                 await db.guilds.queue.set(interaction.guild.id, queue);
                 if (getVoiceConnection(interaction.guild.id)) {
+                    const videoData = await db.videoCache.get(videoId);
                     return interaction.editReply({
                         embeds: [
                             new EmbedBuilder()
-                                .setTitle(`${interaction.member.user.username} added to queue.\nキューに追加されました。`)
+                                .setTitle(`${interaction.member.user.username} added to queue.\nキューに追加されました。\n${videoData.video_title}`)
+                                .setDescription(videoData.channel_title)
                                 .setImage(`https://img.youtube.com/vi/${videoId}/default.jpg`)
                                 .setColor(baseColor)
                         ],
@@ -183,317 +491,9 @@ client.on('interactionCreate', async (interaction) => {
                 }
                 joinAndReply(interaction);
             }
-            // https://music.youtube.com/playlist?list=RDCLAK5uy_lQtAkCG1Gb8Dkx8lCMFTF-WhrX2rTzTAk
-            // listidの長さはそれぞれ異なるので、list以降を全て取得し、&があれば&より前を取得
-            else if (query.match(/^(https?:\/\/)?((music|www)\.)?youtube\.com\/playlist\?list=([a-zA-Z0-9_-]+)/)) {
-                let playListId = query.match(/list=([a-zA-Z0-9_-]+)/)[1].split('&')[0];
-                let playList = await ytpl(playListId);
-                // add to queue
-                let queue = await db.guilds.queue.get(interaction.guild.id);
-                const videoCachePromises = playList.items.map(item => {
-                    queue.push({
-                        videoId: item.id,
-                        messageChannel: interaction.channelId,
-                        user: interaction.member.user.username
-                    });
-                    return db.videoCache.set(item.id, item.title, item.author.name);
-                });
-                await Promise.all(videoCachePromises);
-                await db.guilds.queue.set(interaction.guild.id, queue);
-                if (getVoiceConnection(interaction.guild.id)) {
-                    return interaction.editReply({
-                        embeds: [
-                            new EmbedBuilder()
-                                .setTitle(`${interaction.member.user.username} added playlist to queue.\nキューにプレイリストが追加されました。`)
-                                .setImage(`https://img.youtube.com/vi/${playList.items[0].id}/default.jpg`)
-                                .setColor(baseColor)
-                        ],
-                        ephemeral: true
-                    });
-                }
-                joinAndReply(interaction);
-            }
-            else if (searchCache[query]) createSelectMenu(interaction, searchCache[query]);
-            else {
-                // 検索
-                youtube.search(query, 4, async function (error, result) {
-                    if (error) {
-                        console.log(`error has occurred while searching: ${keyword}`);
-                        interaction.editReply({
-                            content: 'An error has occurred while searching.\n検索中にエラーが発生しました。\nPlease try again with a different keyword.\n別のキーワードで再度お試しください。',
-                            ephemeral: true
-                        });
-                    }
-                    else if (result.items.length == 0) {
-                        console.log(`no music found: ${keyword}`);
-                        interaction.editReply({
-                            content: 'No music found.\n曲が見つかりませんでした。',
-                            ephemeral: true
-                        });
-                    }
-                    else {
-                        result.items = result.items.filter(item => item.id.kind == "youtube#video");
-                        let options = [];
-                        for (let i = 0; i < result.items.length && i < 6; i++) {
-                            options.push(
-                                { label: result.items[i].snippet.title, description: result.items[i].snippet.channelTitle, value: result.items[i].id.videoId }
-                            );
-                            await db.videoCache.set(result.items[i].id.videoId, result.items[i].snippet.title, result.items[i].snippet.channelTitle);
-                        }
-                        searchCache[query] = options;
-                        createSelectMenu(interaction, options);
-                    }
-                });
-            }
         }
-        else if (commandName === 'stop') {
-            const connection = getVoiceConnection(interaction.guild.id);
-            if (connection) connection.destroy();
-            await db.guilds.queue.set(interaction.guild.id, []);
-            await interaction.reply('Stopped playing music.\n音楽の再生を停止しました。');
-        }
-        else if (commandName === 'skip') {
-            if (!onPlaying(interaction.guild.id)) {
-                return await interaction.reply({
-                    content: 'No music is playing.\n音楽が再生されていません。',
-                    ephemeral: true
-                });
-            }
-            const player = getVoiceConnection(interaction.guild.id).state.subscription.player;
-            if (player.state.status === AudioPlayerStatus.Paused) player.unpause();
-            player.stop();
-            await interaction.reply('Skipped the current song.\n現在の曲をスキップしました。');
-        }
-        else if (commandName === 'repeat') {
-            let repeatTimes = interaction.options.getNumber('times');
-            if (repeatTimes < 1) {
-                return await interaction.reply({
-                    content: 'The number of times must be at least 1.\n回数は少なくとも1回である必要があります。',
-                    ephemeral: true
-                });
-            }
-            if (repeatTimes > 1000) repeatTimes = 1000;
-            const queue = await db.guilds.queue.get(interaction.guild.id);
-            let musictoRepeat;
-            if (!queue.length) {
-                const history = await db.guilds.history.get(interaction.guild.id);
-                if (!history.length) {
-                    return await interaction.reply({
-                        content: 'No music has been played even once.\n一度も音楽が再生されていません。',
-                        ephemeral: true
-                    });
-                }
-                const lastMusic = history[history.length - 1];
-                musictoRepeat = { videoId: lastMusic, messageChannel: interaction.channelId };
-            }
-            else {
-                musictoRepeat = queue[0];
-            }
-            musictoRepeat.user = interaction.member.user.username;
-            for (let i = 0; i < repeatTimes; i++) {
-                queue.unshift(musictoRepeat);
-            }
-            await db.guilds.queue.set(interaction.guild.id, queue);
-            if (onPlaying(interaction.guild.id)) {
-                await interaction.reply(`Set to repeat ${repeatTimes} times.\n${repeatTimes}回リピートするように設定しました。${repeatTimes == 1000 ? '（上限）' : ''}`);
-            }
-            else {
-                await interaction.reply(`Set to encore ${repeatTimes} times.\n${repeatTimes}回アンコールするように設定しました。${repeatTimes == 1000 ? '（上限）' : ''}`);
-                joinAndReply(interaction);
-            }
-        }
-        else if (commandName === 'volume') {
-            const volume = interaction.options.getNumber('volume');
-            if (volume <= 0 || volume > 200) {
-                return await interaction.reply({
-                    content: '音量は0より大きく200以下である必要があります。\nVolume must be greater than 0 and less than or equal to 100.',
-                    ephemeral: true
-                });
-            }
-            await interaction.reply(`Volume set to ${volume}%.\n音量を${volume}%に設定しました。`);
-            if (onPlaying(interaction.guild.id)) {
-                const resource = getVoiceConnection(interaction.guild.id).state.subscription.player.state.resource;
-                let currentVolume = await db.guilds.volume.get(interaction.guild.id);
-                try {
-                    while (currentVolume != volume) {
-                        let diff = volume - currentVolume > 5 ? 5 : volume - currentVolume < -5 ? -5 : volume - currentVolume;
-                        currentVolume += diff;
-                        if (currentVolume - volume > -0.5 && currentVolume - volume < 0.5) currentVolume = volume;
-                        resource.volume.setVolume(currentVolume / 100);
-                        await wait(200);
-                    }
-                } catch (error) {
-                    console.log(error);
-                }
-            }
-            db.guilds.volume.set(interaction.guild.id, volume);
-        }
-        else if (commandName === 'history') {
-            const history = await db.guilds.history.get(interaction.guild.id);
-            if (!history || history.length == 0) {
-                return await interaction.reply({
-                    content: 'No music history.\n音楽の履歴がありません。',
-                    ephemeral: true
-                });
-            }
-            let embed = new EmbedBuilder()
-                .setTitle('Music history\n音楽の履歴')
-                .setDescription('List of the last 10 songs played.\n最後10回に再生された曲のリストです。\n' +
-                    'Please press the button to play the song.\n曲を再生するにはボタンを押してください。')
-                .setColor(baseColor);
-            for (let i = 0; i < history.length; i++) {
-                const cacheData = await db.videoCache.get(history[i]);
-                embed.addFields({ name: `No.${i + 1}`, value: `[${cacheData.video_title}](https://www.youtube.com/watch?v=${history[i]})\nby ${cacheData.channel_title}` });
-            }
-            // add button
-            const options = [];
-            for (let i = 0; i < history.length; i++) {
-                options.push({ label: `No.${i + 1}`, value: history[i] });
-            }
-            const selectMenu = new StringSelectMenuBuilder()
-                .setCustomId('musicSelect')
-                .setMinValues(1)
-                .setMaxValues(1)
-                .addOptions(...options);
-            const row = new ActionRowBuilder().addComponents(selectMenu);
-            await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
-        }
-        else if (commandName === 'queue') {
-            const queue = await db.guilds.queue.get(interaction.guild.id);
-            if (!queue.length) {
-                return await interaction.reply({
-                    content: 'No music in the queue.\nキューに音楽がありません。',
-                    ephemeral: true
-                });
-            }
-            let embed = new EmbedBuilder()
-                .setTitle('Music queue\n音楽のキュー')
-                .setDescription('List of songs in the queue.\nキューに入っている曲のリストです。')
-                .setColor(baseColor);
-            let size = queue.length > 10 ? 10 : queue.length;
-            for (let i = 0; i < size; i++) {
-                const cacheData = await db.videoCache.get(queue[i].videoId);
-                embed.addFields({ name: `No.${i + 1}`, value: `[${cacheData.video_title}](https://www.youtube.com/watch?v=${queue[i].videoId})\nby ${cacheData.channel_title}` });
-            }
-            if (queue.length > 10) {
-                // embed.setFooter(`There are ${queue.length - 10} more songs in the queue.\nキューにはあと${queue.length - 10}曲あります。`);
-                embed.setFooter({ text: `There are ${queue.length - 10} more songs in the queue.\nキューにはあと${queue.length - 10}曲あります。` });
-            }
-            await interaction.reply({ embeds: [embed], ephemeral: true });
-        }
-        else if (commandName === 'pause') {
-            const connection = getVoiceConnection(interaction.guild.id);
-            if (!onPlaying(interaction.guild.id)) {
-                return await interaction.reply({
-                    content: 'No music is playing.\n音楽が再生されていません。',
-                    ephemeral: true
-                });
-            }
-            const player = connection.state.subscription.player;
-            player.pause();
-            await interaction.reply('Paused the music.\n音楽を一時停止しました。');
-        }
-        else if (commandName === 'resume') {
-            const connection = getVoiceConnection(interaction.guild.id);
-            if (!onPlaying(interaction.guild.id)) {
-                return await interaction.reply({
-                    content: 'No music is playing.\n音楽が再生されていません。',
-                    ephemeral: true
-                });
-            }
-            const player = connection.state.subscription.player;
-            player.unpause();
-            await interaction.reply('Resumed the music.\n音楽を再開しました。');
-        }
-        else if (commandName === 'shuffle') {
-            const queue = await db.guilds.queue.get(interaction.guild.id);
-            if (queue.length < 2) {
-                return await interaction.reply({
-                    content: 'There are no music in the queue or only one music.\nキューに音楽がないか、1曲しかありません。',
-                    ephemeral: true
-                });
-            }
-            const playingMusic = queue.shift();
-            let shuffledQueue = [playingMusic];
-            const queueLength = queue.length;
-            for (let i = 0; i < queueLength; i++) {
-                const randomIndex = Math.floor(Math.random() * queue.length);
-                shuffledQueue.push(queue[randomIndex]);
-                queue.splice(randomIndex, 1);
-            }
-            await db.guilds.queue.set(interaction.guild.id, shuffledQueue);
-            await interaction.reply('Shuffled the queue.\nキューをシャッフルしました。');
-        }
-        else if (commandName === 'help') {
-            const commandDescriptions = [
-                { name: 'play', description: '指定した曲を再生します。' },
-                { name: 'pause', description: '音楽の再生を一時停止します。\n再生を再開するには`/resume`を使用してください。' },
-                { name: 'resume', description: '音楽の再生を再開します。' },
-                { name: 'skip', description: '再生中の曲をスキップします。' },
-                { name: 'stop', description: '音楽の再生を停止します。' },
-                { name: 'queue', description: '再生予定の曲を表示します。' },
-                { name: 'repeat', description: '再生中の曲をリピートします。' },
-                { name: 'history', description: '再生履歴を表示します。' },
-                { name: 'volume', description: '音量を調整します。' },
-                { name: 'shuffle', description: 'キューに追加された曲をシャッフルします。' },
-                { name: 'help', description: 'コマンドの一覧を表示します。' }
-            ];
-            const embed = new EmbedBuilder()
-                .setTitle('Help\nヘルプ')
-                .setDescription('Commands that can be used with Kokone.\nKokoneで使用できるコマンドです。')
-                .addFields(commandDescriptions.map(command => {
-                    return { name: `/${command.name}`, value: command.description };
-                }))
-                .setColor(baseColor);
-            await interaction.reply({ embeds: [embed], ephemeral: true });
-        }
-    }
-    else if (interaction.isStringSelectMenu()) {
-        const selectId = interaction.customId;
-        log += `SelectMenu: ${selectId}\n`
-            + `Values: ${interaction.values}\n`;
-        fs.appendFileSync('./log.txt', log, 'utf8');
-        if (selectId === 'musicSelect') {
-            await interaction.deferReply({ ephemeral: true });
-            // get voice channel
-            const voiceChannel = interaction.member.voice.channel;
-            if (!voiceChannel) {
-                await interaction.editReply({
-                    content: 'You need to be in a voice channel to play music!\nあなたは音声チャンネルに参加している必要があります。',
-                    ephemeral: true
-                });
-                return;
-            }
-            if (!voiceChannel.permissionsFor(client.user).has(PermissionsBitField.Flags.Connect) ||
-                !voiceChannel.permissionsFor(client.user).has(PermissionsBitField.Flags.Speak) ||
-                !voiceChannel.permissionsFor(client.user).has(PermissionsBitField.Flags.ViewChannel)) {
-                await interaction.editReply({
-                    content: 'I don\'t have permission to join or speak in this channel.\nこのチャンネルに参加または発言する権限がありません。',
-                    ephemeral: true
-                });
-                return;
-            }
-            const videoId = interaction.values[0];
-            // add to queue
-            let queue = await db.guilds.queue.get(interaction.guild.id);
-            const queueData = { videoId: videoId, messageChannel: interaction.channelId, user: interaction.member.user.username };
-            queue.push(queueData);
-            await db.guilds.queue.set(interaction.guild.id, queue);
-            if (getVoiceConnection(interaction.guild.id)) {
-                const videoData = await db.videoCache.get(videoId);
-                return interaction.editReply({
-                    embeds: [
-                        new EmbedBuilder()
-                            .setTitle(`${interaction.member.user.username} added to queue.\nキューに追加されました。\n${videoData.video_title}`)
-                            .setDescription(videoData.channel_title)
-                            .setImage(`https://img.youtube.com/vi/${videoId}/default.jpg`)
-                            .setColor(baseColor)
-                    ],
-                    ephemeral: true
-                });
-            }
-            joinAndReply(interaction);
-        }
+    } catch (error) {
+        console.log(error);
     }
 });
 

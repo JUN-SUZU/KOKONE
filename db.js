@@ -19,15 +19,15 @@ class DB {
                     return;
                 }
                 console.log('connected as id ' + this.connection.threadId);
+                // SET wait_timeout = 86400;
+                // SET interactive_timeout = 86400;
+                this.connection.query('SET SESSION wait_timeout = 86400');
+                this.connection.query('SET SESSION interactive_timeout = 86400');
             });
             this.queryAsync = util.promisify(this.connection.query).bind(this.connection);
             this.connection.on('error', (err) => {
                 console.log('db error', err);
-                if (err.code === 'PROTOCOL_CONNECTION_LOST') {
-                    connect();
-                } else {
-                    throw err;
-                }
+                connect();
             });
         }
         connect();

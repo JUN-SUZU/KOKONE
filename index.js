@@ -5,7 +5,7 @@ const db = new DB();
 
 // discord.js
 const { ActionRowBuilder, ActivityType, ChannelType, Client, Collection,
-    EmbedBuilder, Events, GatewayIntentBits, PermissionsBitField,
+    EmbedBuilder, Events, GatewayIntentBits, Partials, PermissionsBitField,
     StringSelectMenuBuilder } = require('discord.js');
 const { entersState, AudioPlayerStatus, AudioReceiveStream, createAudioPlayer, createAudioResource, EndBehaviorType,
     joinVoiceChannel, getVoiceConnection, NoSubscriberBehavior, StreamType } = require('@discordjs/voice');
@@ -44,7 +44,11 @@ const client = new Client({
         GatewayIntentBits.GuildMembers,
         GatewayIntentBits.GuildVoiceStates,
         GatewayIntentBits.GuildMessageTyping,
-        GatewayIntentBits.MessageContent
+        GatewayIntentBits.DirectMessages
+    ],
+    partials: [
+        Partials.Message,
+        Partials.Channel
     ]
 });
 
@@ -63,35 +67,46 @@ client.on('guildCreate', async (guild) => {
 });
 
 client.on('messageCreate', async (message) => {
-    if (message.content === 'kokone recovery command') {
-        let guild = message.guild;
-        registerSlashCommands(guild);
-        message.reply('Command registration completed.\nコマンドの登録が完了しました。');
+    if (message.author.bot || message.guildId || message.author.id !== '704668240030466088') return;
+    const args = message.content.split(' ');
+    if (args[0] !== 'kokone') return;
+    if (args[1] === 'recovery'){
+        if (args[2] === 'command'){
+            guildId = args[3];
+            if (guildId === 'all'){
+                client.guilds.cache.forEach(guild => {
+                    registerSlashCommands(guild);
+                });
+                message.reply('Command registration completed in all servers.\n全てのサーバーでコマンドの登録が完了しました。');
+            }
+            else{
+                registerSlashCommands(client.guilds.cache.get(guildId));
+                message.reply('Command registration completed.\nコマンドの登録が完了しました。');
+            }
+        }
     }
-    else if (message.content === 'kokone recovery command all') {
-        client.guilds.cache.forEach(guild => {
-            registerSlashCommands(guild);
-        });
-        message.reply('Command registration completed in all servers.\n全てのサーバーでコマンドの登録が完了しました。');
+    else if (args[1] === 'show'){
+        if (args[2] === 'guilds'){
+            await client.guilds.fetch();
+            let guilds = client.guilds.cache.map(guild => guild.name);
+            message.reply(`\`\`\`${guilds.join('\n')}\`\`\``);
+        }
     }
-    else if (message.content === 'kokone show guilds') {
-        await client.guilds.fetch();
-        let guilds = client.guilds.cache.map(guild => guild.name);
-        message.reply(`\`\`\`${guilds.join('\n')}\`\`\``);
-    }
-    else if (message.content.startsWith('kokone global notice') && message.author.id === '704668240030466088') {
-        // 全てのサーバーで通知
-        client.guilds.cache.forEach(guild => {
-            try {
-                if (guild.systemChannel && guild.systemChannel.permissionsFor(client.user).has(PermissionsBitField.Flags.SendMessages)) {
-                    guild.systemChannel.send('This is a global notice.\nこれはグローバル通知です。' + message.content.slice(20));
+    else if (args[1] === 'global'){
+        if (args[2] === 'notice'){
+            // 全てのサーバーで通知
+            client.guilds.cache.forEach(guild => {
+                try {
+                    if (guild.systemChannel && guild.systemChannel.permissionsFor(client.user).has(PermissionsBitField.Flags.SendMessages)) {
+                        guild.systemChannel.send('This is a global notice.\nこれはグローバル通知です。' + message.content.slice(20));
+                    }
                 }
-            }
-            catch (error) {
-                console.log(`Error has occurred while sending global notice: ${guild.name}(ID: ${guild.id})`);
-                console.log(error);
-            }
-        });
+                catch (error) {
+                    console.log(`Error has occurred while sending global notice: ${guild.name}(ID: ${guild.id})`);
+                    console.log(error);
+                }
+            });
+        }
     }
 });
 

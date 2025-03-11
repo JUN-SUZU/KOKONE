@@ -41,7 +41,6 @@ const client = new Client({
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.GuildMessageReactions,
-        GatewayIntentBits.GuildMembers,
         GatewayIntentBits.GuildVoiceStates,
         GatewayIntentBits.GuildMessageTyping,
         GatewayIntentBits.DirectMessages
@@ -86,11 +85,11 @@ client.on('messageCreate', async (message) => {
         }
     }
     else if (args[1] === 'show'){
-        if (args[2] === 'guilds'){
-            await client.guilds.fetch();
-            let guilds = client.guilds.cache.map(guild => guild.name);
-            message.reply(`\`\`\`${guilds.join('\n')}\`\`\``);
-        }
+        // if (args[2] === 'guilds'){
+        //     await client.guilds.fetch();
+        //     let guilds = client.guilds.cache.map(guild => guild.name);
+        //     message.reply(`\`\`\`${guilds.join('\n')}\`\`\``);
+        // }
     }
     else if (args[1] === 'global'){
         if (args[2] === 'notice'){

@@ -622,7 +622,7 @@ async function playMusic(connection, videoId, guildId) {
     try {
         let info = await ytdl.getInfo(videoId);
         let audioFormats = ytdl.filterFormats(info.formats, 'audioonly');
-        if (audioFormats.filter(format => format.container === 'mp4' && format.audioCodec === 'mp4a.40.5').length == 0) {//mp4 aac
+        if (audioFormats.filter(format => format.container === 'mp4' && format.audioCodec === 'mp4a.40.2').length == 0) {//mp4 aac
             stream = fs.createReadStream('./restricted.mp3');
         }
     } catch (error) {
@@ -631,7 +631,7 @@ async function playMusic(connection, videoId, guildId) {
     }
     if (!stream) {
         stream = ytdl(`https://www.youtube.com/watch?v=${videoId}`, {
-            filter: format => format.container === 'mp4' && format.audioCodec === 'mp4a.40.5',
+            filter: format => format.container === 'mp4' && format.audioCodec === 'mp4a.40.2',
             quality: 'highestaudio',
             highWaterMark: 32 * 1024 * 1024
         });

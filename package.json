@@ -14,7 +14,7 @@
   "dependencies": {
     "@discordjs/opus": "^0.9.0",
     "@discordjs/voice": "^0.17.0",
-    "@distube/ytdl-core": "^4.16.4",
+    "@distube/ytdl-core": "^4.16.5",
     "discord.js": "^14.15.3",
     "mysql2": "^3.12.0",
     "node-cron": "^3.0.3",

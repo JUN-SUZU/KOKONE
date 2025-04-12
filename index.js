@@ -6,7 +6,7 @@ const db = new DB();
 // discord.js
 const { ActionRowBuilder, ActivityType, ChannelType, Client, Collection,
     EmbedBuilder, Events, GatewayIntentBits, Partials, PermissionsBitField,
-    StringSelectMenuBuilder } = require('discord.js');
+    StringSelectMenuBuilder, ThreadAutoArchiveDuration } = require('discord.js');
 const { entersState, AudioPlayerStatus, AudioReceiveStream, createAudioPlayer, createAudioResource, EndBehaviorType,
     joinVoiceChannel, getVoiceConnection, NoSubscriberBehavior, StreamType } = require('@discordjs/voice');
 
@@ -25,6 +25,12 @@ const ytdl = require('@distube/ytdl-core');
 // dashboard
 const http = require('http');
 const WebSocket = require('ws');
+
+// const WebSocketManager = require('./util/ws.js');
+// const RESTManager = require('./util/rest.js');
+// const wsm = new WebSocketManager();
+// const rest = new RESTManager(wsm);
+// let VoiceState = {};
 
 // other modules
 const fs = require('fs');
@@ -69,30 +75,30 @@ client.on('messageCreate', async (message) => {
     if (message.author.bot || message.guildId || message.author.id !== '704668240030466088') return;
     const args = message.content.split(' ');
     if (args[0] !== 'kokone') return;
-    if (args[1] === 'recovery'){
-        if (args[2] === 'command'){
+    if (args[1] === 'recovery') {
+        if (args[2] === 'command') {
             guildId = args[3];
-            if (guildId === 'all'){
+            if (guildId === 'all') {
                 client.guilds.cache.forEach(guild => {
                     registerSlashCommands(guild);
                 });
                 message.reply('Command registration completed in all servers.\n全てのサーバーでコマンドの登録が完了しました。');
             }
-            else{
+            else {
                 registerSlashCommands(client.guilds.cache.get(guildId));
                 message.reply('Command registration completed.\nコマンドの登録が完了しました。');
             }
         }
     }
-    else if (args[1] === 'show'){
+    else if (args[1] === 'show') {
         // if (args[2] === 'guilds'){
         //     await client.guilds.fetch();
         //     let guilds = client.guilds.cache.map(guild => guild.name);
         //     message.reply(`\`\`\`${guilds.join('\n')}\`\`\``);
         // }
     }
-    else if (args[1] === 'global'){
-        if (args[2] === 'notice'){
+    else if (args[1] === 'global') {
+        if (args[2] === 'notice') {
             // 全てのサーバーで通知
             client.guilds.cache.forEach(guild => {
                 try {
@@ -164,6 +170,48 @@ client.on('interactionCreate', async (interaction) => {
                 // search video id
                 const keyword = interaction.options.getString('keyword');
                 let query = keyword.replace(/"/g, '');
+                // if (config.streamMode === "LavaLink") {
+                //     interaction.editReply({
+                //         content: 'Now, this bot is under maintenance.\n現在、このボットはメンテナンス中です。\n start playing on restricted mode.\n制限モードで再生を開始します。',
+                //         ephemeral: true
+                //     });
+                //     const tracks = await rest.loadTracks('ytsearch:' + keyword);
+                //     if (!tracks) {
+                //         return interaction.editReply({
+                //             content: 'The music could not be found.\n曲が見つかりませんでした。\nNow, this bot supports ' + config.mediaSources.join(', ') + '.'
+                //                 + 'Please try again with a different keyword.\n別のキーワードで再度お試しください。',
+                //             ephemeral: true
+                //         });
+                //     }
+                //     try {
+                //         joinVoiceChannel({
+                //             channelId: voiceChannel.id,
+                //             guildId: interaction.guild.id,
+                //             adapterCreator: interaction.guild.voiceAdapterCreator,
+                //             selfDeaf: false,
+                //             selfMute: false,
+                //             timeout: 10 * 1000
+                //         });
+                //         const track = tracks.data[0];
+                //         // const volume = await db.guilds.volume.get(interaction.guild.id);
+                //         const volume = 20;
+                //         setTimeout(() => {
+                //             rest.updatePlayer(interaction.guild.id, {
+                //                 track: track,
+                //                 position: 0,
+                //                 volume: Math.round(volume),
+                //                 paused: false,
+                //                 voice: VoiceState[interaction.guild.id]
+                //             });
+                //         }, 2000);
+                //     } catch (error) {
+                //         console.log(error);
+                //     }
+                //     return interaction.editReply({
+                //         content: 'Now playing with restricted mode.\n制限モードで再生を開始します。\n試験的に新しいモジュールを使用しているため、playコマンド以外の機能は使用できません。',
+                //         ephemeral: true
+                //     });
+                // }
                 if (query.match(/^(https?:\/\/)?((music|www)\.)?youtube\.com\/watch(\/\?|\?)v=([a-zA-Z0-9_-]{11})/) ||
                     query.match(/^(https?:\/\/)?((music|www)\.)?youtu\.be\/([a-zA-Z0-9_-]{11})/) ||
                     query.match(/^(https?:\/\/)?((music|www)\.)?youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/)) {
@@ -281,6 +329,7 @@ client.on('interactionCreate', async (interaction) => {
             }
             else if (commandName === 'repeat') {
                 let repeatTimes = interaction.options.getNumber('times');
+                let queueAll = interaction.options.getBoolean('queue');
                 if (repeatTimes < 1) {
                     return await interaction.reply({
                         content: 'The number of times must be at least 1.\n回数は少なくとも1回である必要があります。',
@@ -290,6 +339,7 @@ client.on('interactionCreate', async (interaction) => {
                 if (repeatTimes > 1000) repeatTimes = 1000;
                 const queue = await db.guilds.queue.get(interaction.guild.id);
                 let musictoRepeat;
+                let musicstoRepeat;
                 if (!queue.length) {
                     const history = await db.guilds.history.get(interaction.guild.id);
                     if (!history.length) {
@@ -300,13 +350,25 @@ client.on('interactionCreate', async (interaction) => {
                     }
                     const lastMusic = history[history.length - 1];
                     musictoRepeat = { videoId: lastMusic, messageChannel: interaction.channelId };
+                    queueAll = false;
+                }
+                else if (queueAll) {
+                    musicstoRepeat = [...queue];
+                    musicstoRepeat.forEach(music => {
+                        music.user = interaction.member.user.username;
+                    });
                 }
                 else {
                     musictoRepeat = queue[0];
                 }
-                musictoRepeat.user = interaction.member.user.username;
+                if (!queueAll) musictoRepeat.user = interaction.member.user.username;
                 for (let i = 0; i < repeatTimes; i++) {
-                    queue.unshift(musictoRepeat);
+                    if (queueAll) {
+                        queue.push(...musicstoRepeat);
+                    }
+                    else {
+                        queue.unshift(musictoRepeat);
+                    }
                 }
                 await db.guilds.queue.set(interaction.guild.id, queue);
                 if (onPlaying(interaction.guild.id)) {
@@ -622,7 +684,7 @@ async function playMusic(connection, videoId, guildId) {
     try {
         let info = await ytdl.getInfo(videoId);
         let audioFormats = ytdl.filterFormats(info.formats, 'audioonly');
-        if (audioFormats.filter(format => format.container === 'mp4' && format.audioCodec === 'mp4a.40.5').length == 0) {//mp4 aac
+        if (audioFormats.filter(format => format.container === 'mp4' && format.audioCodec === 'mp4a.40.2').length == 0) {//mp4 aac
             stream = fs.createReadStream('./restricted.mp3');
         }
     } catch (error) {
@@ -631,7 +693,7 @@ async function playMusic(connection, videoId, guildId) {
     }
     if (!stream) {
         stream = ytdl(`https://www.youtube.com/watch?v=${videoId}`, {
-            filter: format => format.container === 'mp4' && format.audioCodec === 'mp4a.40.5',
+            filter: format => format.container === 'mp4' && format.audioCodec === 'mp4a.40.2',
             quality: 'highestaudio',
             highWaterMark: 32 * 1024 * 1024
         });
@@ -698,6 +760,25 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
         }
     }
 });
+//     if (newState.id === client.user.id) {
+//         const sessionId = newState.sessionId;
+//         if (sessionId) {
+//             VoiceState[newState.guild.id] = VoiceState[newState.guild.id] || {};
+//             VoiceState[newState.guild.id].sessionId = sessionId;
+//         }
+//     }
+// });
+
+// client.on('raw', async (packet) => {
+//     if (packet.t === 'VOICE_SERVER_UPDATE') {
+//         const { token, guild_id, endpoint } = packet.d;
+//         console.log('token: ', token);
+//         if (token && guild_id && endpoint) {
+//             VoiceState[guild_id] = VoiceState[guild_id] || {};
+//             VoiceState[guild_id].token = token;
+//             VoiceState[guild_id].endpoint = endpoint;
+//     }
+// }
 
 cron.schedule('*/10 * * * *', () => {
     client.isSkip = client.isSkip.clone();

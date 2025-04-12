@@ -1,7 +1,7 @@
 const config = require('./config.json');
 // database
 const DB = require('./db.js');
-// const db = new DB();
+const db = new DB();
 
 // discord.js
 const { ActionRowBuilder, ActivityType, ChannelType, Client, Collection,
@@ -329,6 +329,7 @@ client.on('interactionCreate', async (interaction) => {
             }
             else if (commandName === 'repeat') {
                 let repeatTimes = interaction.options.getNumber('times');
+                let queueAll = interaction.options.getBoolean('queue');
                 if (repeatTimes < 1) {
                     return await interaction.reply({
                         content: 'The number of times must be at least 1.\n回数は少なくとも1回である必要があります。',
@@ -338,6 +339,7 @@ client.on('interactionCreate', async (interaction) => {
                 if (repeatTimes > 1000) repeatTimes = 1000;
                 const queue = await db.guilds.queue.get(interaction.guild.id);
                 let musictoRepeat;
+                let musicstoRepeat;
                 if (!queue.length) {
                     const history = await db.guilds.history.get(interaction.guild.id);
                     if (!history.length) {
@@ -348,13 +350,25 @@ client.on('interactionCreate', async (interaction) => {
                     }
                     const lastMusic = history[history.length - 1];
                     musictoRepeat = { videoId: lastMusic, messageChannel: interaction.channelId };
+                    queueAll = false;
+                }
+                else if (queueAll) {
+                    musicstoRepeat = [...queue];
+                    musicstoRepeat.forEach(music => {
+                        music.user = interaction.member.user.username;
+                    });
                 }
                 else {
                     musictoRepeat = queue[0];
                 }
-                musictoRepeat.user = interaction.member.user.username;
+                if (!queueAll) musictoRepeat.user = interaction.member.user.username;
                 for (let i = 0; i < repeatTimes; i++) {
-                    queue.unshift(musictoRepeat);
+                    if (queueAll) {
+                        queue.push(...musicstoRepeat);
+                    }
+                    else {
+                        queue.unshift(musictoRepeat);
+                    }
                 }
                 await db.guilds.queue.set(interaction.guild.id, queue);
                 if (onPlaying(interaction.guild.id)) {

@@ -464,6 +464,8 @@ client.on('interactionCreate', async (interaction) => {
                 }
                 const player = connection.state.subscription.player;
                 player.pause();
+                playingTime[interaction.guild.id].totalPlayedTime += Date.now() - playingTime[interaction.guild.id].playStartTime;
+                playingTime[interaction.guild.id].playStartTime = null;
                 await interaction.reply('Paused the music.\n音楽を一時停止しました。');
             }
             else if (commandName === 'resume') {
@@ -476,6 +478,7 @@ client.on('interactionCreate', async (interaction) => {
                 }
                 const player = connection.state.subscription.player;
                 player.unpause();
+                playingTime[interaction.guild.id].playStartTime = Date.now();
                 await interaction.reply('Resumed the music.\n音楽を再開しました。');
             }
             else if (commandName === 'shuffle') {
@@ -698,7 +701,7 @@ async function playMusic(connection, videoId, guildId) {
             highWaterMark: 32 * 1024 * 1024
         });
         const musicLength = await ytdl.getBasicInfo(videoId).then(info => info.videoDetails.lengthSeconds);
-        playingTime[guildId] = { startTime: Date.now(), musicLength: musicLength };
+        playingTime[guildId] = { totalPlayedTime: 0, playStartTime: Date.now(), musicLength: musicLength };
     }
 
     const resource = createAudioResource(stream, {

@@ -133,7 +133,8 @@ function refreshSeekbar(playingTime) {
     if (handlers.playingTime) clearInterval(handlers.playingTime);
     handlers.playingTime = setInterval(() => {
         const now = new Date().getTime();
-        const elapsed = now - playingTime.startTime;
+        let elapsed = playingTime.totalPlayedTime;// unit: ms
+        elapsed += playingTime.playStartTime != null ? now - playingTime.playStartTime : 0;
         const percentage = elapsed / playingTime.musicLength / 10;
         if (percentage > 100) {
             clearInterval(handlers.playingTime);

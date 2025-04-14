@@ -72,8 +72,8 @@ const connectWebSocket = () => {
             if (guilds[selectedGuild].playing) {
                 document.getElementById('mcover').src = `https://img.youtube.com/vi/${guildData.queue[0].videoId}/default.jpg`;
                 refreshSeekbar(guildData.playingTime);
+                socket.send(JSON.stringify({ action: 'getVideoData', videoID: guildData.queue[0].videoId, flag: 'playing' }));
             }
-            socket.send(JSON.stringify({ action: 'getVideoData', videoID: guildData.queue[0].videoId, flag: 'playing' }));
         }
         else if (data.action === 'getVideoData') {
             console.log('Received video data.');
@@ -110,7 +110,14 @@ class controlButtonEvent {
                 socket.send(JSON.stringify({ action: 'controlPlayer', guildID: guilds[selectedGuild].id, control: 'shuffle' }));
             });
             document.getElementById('playButton').addEventListener('click', () => {
-                socket.send(JSON.stringify({ action: 'controlPlayer', guildID: guilds[selectedGuild].id, control: 'play' }));
+                if (guilds[selectedGuild].playing) {
+                    document.getElementById('playButton').innerHTML = '<ion-icon name="play"></ion-icon>';
+                    socket.send(JSON.stringify({ action: 'controlPlayer', guildID: guilds[selectedGuild].id, control: 'pause' }));
+                }
+                else {
+                    document.getElementById('playButton').innerHTML = '<ion-icon name="pause"></ion-icon>';
+                    socket.send(JSON.stringify({ action: 'controlPlayer', guildID: guilds[selectedGuild].id, control: 'play' }));
+                }
             });
             document.getElementById('pauseButton').addEventListener('click', () => {
                 socket.send(JSON.stringify({ action: 'controlPlayer', guildID: guilds[selectedGuild].id, control: 'pause' }));

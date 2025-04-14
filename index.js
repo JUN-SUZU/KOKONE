@@ -60,6 +60,7 @@ const client = new Client({
 client.isSkip = new Collection();
 let searchCache = JSON.parse(fs.readFileSync('./searchCache.json', 'utf8'));
 let playingTime = {};
+const wsConnections = {};
 
 client.once('ready', async () => {
     console.log(`Logged in as ${client.user.tag}`);
@@ -983,6 +984,22 @@ wsServer.on('connection', (ws, request) => {
                     db.guilds.volume.set(guild.id, data.value);
                 }
                 ws.send(JSON.stringify({ type: 'response', action: 'controlPlayer', details: 'Success' }));
+            }
+            else if (data.action === 'subscribeGuild') {
+                const guild = data.guildID;
+                if (!client.guilds.cache.has(guild)) {
+                    ws.send(JSON.stringify({ type: 'response', action: 'subscribeGuild', error: 'Guild not found.' }));
+                    return;
+                }
+                if (wsConnections[guild]) {
+                    wsConnections[guild] = []
+                }
+                wsConnections[guild].push(ws);
+                ws.on('close', () => {
+                    wsConnections[guild] = wsConnections[guild].filter(client => client !== ws);
+                    if (wsConnections[guild].length === 0) delete wsConnections[guild];
+                });
+                ws.send(JSON.stringify({ type: 'response', action: 'subscribeGuild', details: 'Success' }));
             }
             // お気に入りリストの取得
         } catch (error) {

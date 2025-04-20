@@ -62,7 +62,9 @@ const connectWebSocket = () => {
                 });
                 guildList.appendChild(guildButton);
             }
-            socket.send(JSON.stringify({ action: 'getGuildData', guildID: guilds[0].id }));
+            if (guilds.length > 0) {
+                guildList.children[0].click();
+            }
         }
         else if (data.action === 'getGuildData') {
             console.log('Received guild data.');
@@ -119,9 +121,9 @@ class controlButtonEvent {
                     socket.send(JSON.stringify({ action: 'controlPlayer', guildID: guilds[selectedGuild].id, control: 'play' }));
                 }
             });
-            document.getElementById('pauseButton').addEventListener('click', () => {
-                socket.send(JSON.stringify({ action: 'controlPlayer', guildID: guilds[selectedGuild].id, control: 'pause' }));
-            });
+            // document.getElementById('pauseButton').addEventListener('click', () => {
+            //     socket.send(JSON.stringify({ action: 'controlPlayer', guildID: guilds[selectedGuild].id, control: 'pause' }));
+            // });
             document.getElementById('skipButton').addEventListener('click', () => {
                 socket.send(JSON.stringify({ action: 'controlPlayer', guildID: guilds[selectedGuild].id, control: 'skip' }));
             });

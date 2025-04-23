@@ -101,10 +101,10 @@ client.on('messageCreate', async (message) => {
     else if (args[1] === 'global') {
         if (args[2] === 'notice') {
             // 全てのサーバーで通知
-            client.guilds.cache.forEach(guild => {
+            client.guilds.cache.forEach(async (guild) => {
                 try {
                     if (guild.systemChannel && guild.systemChannel.permissionsFor(client.user).has(PermissionsBitField.Flags.SendMessages)) {
-                        guild.systemChannel.send('This is a global notice.\nこれはグローバル通知です。' + message.content.slice(20));
+                        await guild.systemChannel.send('This is a global notice.\nこれはグローバル通知です。' + message.content.slice(20));
                     }
                 }
                 catch (error) {

@@ -828,66 +828,106 @@ const server = http.createServer((req, res) => {
             try {
                 const data = JSON.parse(body);
                 if (url === '/login/api/') {
-                    async function getDiscordToken(code) {
-                        const data = {
+                    const oauth2TokenOptions = {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: new URLSearchParams({
                             client_id: config.clientID,
                             client_secret: config.clientSecret,
                             grant_type: 'authorization_code',
-                            code: code,
+                            code: data.code,
                             redirect_uri: config.url + '/login/',
-                            scope: 'identify email'
-                        };
-                        const options = {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/x-www-form-urlencoded',
-                            },
-                            body: new URLSearchParams(data),
-                        };
-                        const response = await fetch('https://discord.com/api/oauth2/token', options);
-                        const json = await response.json();
-                        return json.access_token;
+                            scope: 'identify guilds'
+                        })
+                    };
+                    const oauth2TokenResponse = await fetch('https://discord.com/api/oauth2/token', oauth2TokenOptions).then(res => res.json());
+                    /*
+                    {
+                        token_type: 'Bearer',
+                        access_token: '...',
+                        expires_in: 604800,
+                        refresh_token: '...',
+                        scope: 'identify guilds'
                     }
-                    async function getUserData(token) {
-                        const options = {
-                            headers: {
-                                Authorization: `Bearer ${token}`
-                            }
-                        };
-                        const response = await fetch('https://discord.com/api/users/@me', options);
-                        return await response.json();
-                    }
-                    getDiscordToken(data.code).then((token) => {
-                        getUserData(token).then(async (user) => {
-                            if (!user.id) {
-                                res.writeHead(403, { 'Content-Type': 'application/json' });
-                                res.end(JSON.stringify({ result: 'fail' }));
-                                return;
-                            }
-                            // ランダムな16文字の文字列を生成
-                            let kokoneToken = await db.clients.token.get(user.id);
-                            if (!kokoneToken) kokoneToken = [...Array(16)].map(() => Math.random().toString(36)[2]).join('');
-                            db.clients.set(user.id, {
-                                kokoneToken: kokoneToken,
-                                username: user.username,
-                                globalName: user.global_name,
-                                avatar: `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`
-                            });
-                            // res.writeHead(200, resHeader);
-                            // res.end(JSON.stringify({ result: 'success', userID: user.id, token: kokoneToken }));
-                            res.writeHead(200, {
-                                'Content-Type': 'application/json',
-                                'Set-Cookie': [
-                                    `userID=${user.id}; Max-Age=604800; Secure; HttpOnly; SameSite=None; Domain=.jun-suzu.net; Path=/`,
-                                    `kokoneToken=${kokoneToken}; Max-Age=604800; Secure; HttpOnly; SameSite=None; Domain=.jun-suzu.net; Path=/`
-                                ]
-                            });
-                            res.end(JSON.stringify({ result: 'success' }));
-                        });
-                    }).catch((e) => {
+                    */
+                    if (!oauth2TokenResponse.access_token) {
                         res.writeHead(403, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ result: 'fail' }));
+                        return;
+                    }
+                    const userDataResponse = await fetch('https://discord.com/api/users/@me', {
+                        headers: {
+                            Authorization: `Bearer ${oauth2TokenResponse.access_token}`
+                        }
+                    }).then(res => res.json());
+                    /*
+                    https://discord.com/developers/docs/resources/user#user-object
+                    {
+                        id: '...',
+                        username: '...',
+                        avatar: '...',
+                        discriminator: '...', \\ 新しいアカウントはユーザー名のみで、0
+                        public_flags: DDDDDDD,
+                        flags: DDDDDDDD, \\ public_flags と同じ
+                        banner: '...',
+                        accent_color: DDDDDDD,
+                        global_name: '...',
+                        avatar_decoration_data: {
+                            asset: '...',
+                            sku_id: '...',
+                            expires_at: null
+                        },
+                        banner_color: '#XXXXXX',
+                        mfa_enabled: true,
+                        locale: 'ja',
+                        premium_type: 2
+                    }
+                    */
+                    if (!userDataResponse.id) {
+                        res.writeHead(403, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ result: 'fail' }));
+                        return;
+                    }
+                    const guildsOfUserResponse = await fetch('https://discord.com/api/users/@me/guilds', {
+                        headers: {
+                            Authorization: `Bearer ${oauth2TokenResponse.access_token}`
+                        }
+                    }).then(res => res.json());
+                    /*
+                    https://discord.com/developers/docs/resources/user#get-current-user-guilds
+                    */
+                    const guildsOfUser = guildsOfUserResponse.map(guild => {
+                        return {
+                            id: guild.id,
+                            name: guild.name,
+                            icon: guild.icon ? `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png` : null,
+                            owner: guild.owner
+                        };
                     });
+                    // ランダムな16文字の文字列を生成
+                    let kokoneToken = await db.clients.token.get(userDataResponse.id);
+                    if (!kokoneToken) kokoneToken = [...Array(16)].map(() => Math.random().toString(36)[2]).join('');
+                    // datetime型の
+                    db.clients.set(userDataResponse.id, {
+                        username: userDataResponse.username,
+                        globalName: userDataResponse.global_name,
+                        avatar: `https://cdn.discordapp.com/avatars/${userDataResponse.id}/${userDataResponse.avatar}.png`,
+                        kokoneToken: kokoneToken,
+                        refreshToken: oauth2TokenResponse.refresh_token,
+                        expiresOn: Date.now() + oauth2TokenResponse.expires_in * 1000,
+                        locale: userDataResponse.locale,
+                        guilds: guildsOfUser
+                    });
+                    res.writeHead(200, {
+                        'Content-Type': 'application/json',
+                        'Set-Cookie': [
+                            `userID=${userDataResponse.id}; Max-Age=604800; Secure; HttpOnly; SameSite=None; Domain=.jun-suzu.net; Path=/`,
+                            `kokoneToken=${kokoneToken}; Max-Age=604800; Secure; HttpOnly; SameSite=None; Domain=.jun-suzu.net; Path=/`
+                        ]
+                    });
+                    res.end(JSON.stringify({ result: 'success' }));
                 }
             } catch (error) {
                 // return no error or message
@@ -916,15 +956,14 @@ wsServer.on('connection', (ws, request) => {
                 const userSettings = await db.clients.options.get(userID);
                 ws.send(JSON.stringify({ type: 'response', action: 'getUserSettings', details: userSettings }));
                 // 所属しているサーバーのidと名前とアイコンを送信
-                const guilds = client.guilds.cache.filter(guild => guild.members.cache.has(userID)).map(guild => {
-                    return {
-                        id: guild.id,
-                        name: guild.name,
-                        icon: guild.iconURL({ extension: 'png', size: 128 }),
-                        playing: onPlaying(guild.id)
-                    };
+                const guilds = await db.clients.guilds.get(userID);
+                if (!guilds) {
+                    ws.send(JSON.stringify({ type: 'response', action: 'getGuilds', details: [] }));
+                    return;
+                }
+                guilds.forEach(guild => {
+                    guild.playing = onPlaying(guild.id);
                 });
-                console.log(guilds);
                 if (!guilds.length) ws.send(JSON.stringify({ type: 'response', action: 'getGuilds', details: [] }));
                 ws.send(JSON.stringify({ type: 'response', action: 'getGuilds', details: guilds }));
             }

@@ -240,11 +240,16 @@ body main .main__panel .main__contents .player__control .volume__panel {
   align-items: center;
 }
 body main .main__panel .main__contents .player__control .volume__panel .volume__progress {
+  -webkit-appearance: none;
+     -moz-appearance: none;
+          appearance: none;
   width: 50%;
   max-width: 200px;
+  height: 10px;
   background: #1c2b3a;
   border-radius: 0.5rem;
   margin: 0 1rem;
+  cursor: pointer;
 }
 body main .main__panel .main__contents .player__control .buttons__panel {
   display: flex;

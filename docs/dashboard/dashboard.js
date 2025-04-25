@@ -62,7 +62,9 @@ const connectWebSocket = () => {
                 });
                 guildList.appendChild(guildButton);
             }
-            socket.send(JSON.stringify({ action: 'getGuildData', guildID: guilds[0].id }));
+            if (guilds.length > 0) {
+                guildList.children[0].click();
+            }
         }
         else if (data.action === 'getGuildData') {
             console.log('Received guild data.');
@@ -72,8 +74,8 @@ const connectWebSocket = () => {
             if (guilds[selectedGuild].playing) {
                 document.getElementById('mcover').src = `https://img.youtube.com/vi/${guildData.queue[0].videoId}/default.jpg`;
                 refreshSeekbar(guildData.playingTime);
+                socket.send(JSON.stringify({ action: 'getVideoData', videoID: guildData.queue[0].videoId, flag: 'playing' }));
             }
-            socket.send(JSON.stringify({ action: 'getVideoData', videoID: guildData.queue[0].videoId, flag: 'playing' }));
         }
         else if (data.action === 'getVideoData') {
             console.log('Received video data.');
@@ -110,11 +112,18 @@ class controlButtonEvent {
                 socket.send(JSON.stringify({ action: 'controlPlayer', guildID: guilds[selectedGuild].id, control: 'shuffle' }));
             });
             document.getElementById('playButton').addEventListener('click', () => {
-                socket.send(JSON.stringify({ action: 'controlPlayer', guildID: guilds[selectedGuild].id, control: 'play' }));
+                if (guilds[selectedGuild].playing) {
+                    document.getElementById('playButton').innerHTML = '<ion-icon name="play"></ion-icon>';
+                    socket.send(JSON.stringify({ action: 'controlPlayer', guildID: guilds[selectedGuild].id, control: 'pause' }));
+                }
+                else {
+                    document.getElementById('playButton').innerHTML = '<ion-icon name="pause"></ion-icon>';
+                    socket.send(JSON.stringify({ action: 'controlPlayer', guildID: guilds[selectedGuild].id, control: 'play' }));
+                }
             });
-            document.getElementById('pauseButton').addEventListener('click', () => {
-                socket.send(JSON.stringify({ action: 'controlPlayer', guildID: guilds[selectedGuild].id, control: 'pause' }));
-            });
+            // document.getElementById('pauseButton').addEventListener('click', () => {
+            //     socket.send(JSON.stringify({ action: 'controlPlayer', guildID: guilds[selectedGuild].id, control: 'pause' }));
+            // });
             document.getElementById('skipButton').addEventListener('click', () => {
                 socket.send(JSON.stringify({ action: 'controlPlayer', guildID: guilds[selectedGuild].id, control: 'skip' }));
             });
@@ -133,7 +142,8 @@ function refreshSeekbar(playingTime) {
     if (handlers.playingTime) clearInterval(handlers.playingTime);
     handlers.playingTime = setInterval(() => {
         const now = new Date().getTime();
-        const elapsed = now - playingTime.startTime;
+        let elapsed = playingTime.totalPlayedTime;// unit: ms
+        elapsed += playingTime.playStartTime != null ? now - playingTime.playStartTime : 0;
         const percentage = elapsed / playingTime.musicLength / 10;
         if (percentage > 100) {
             clearInterval(handlers.playingTime);

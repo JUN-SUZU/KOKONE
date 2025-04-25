@@ -21,16 +21,21 @@ table: guilds / clients / videoCache
 
 ### clients
 
-+-------------+-------------+------+-----+---------+-------+
-| Field       | Type        | Null | Key | Default | Extra |
-+-------------+-------------+------+-----+---------+-------+
-| client_id   | varchar(20) | NO   | PRI | NULL    |       |
-| options     | json        | YES  |     | NULL    |       |
-| token       | varchar(16) | YES  |     | NULL    |       |
-| user_name   | text        | YES  |     | NULL    |       |
-| global_name | text        | YES  |     | NULL    |       |
-| avatar_url  | text        | YES  |     | NULL    |       |
-+-------------+-------------+------+-----+---------+-------+
+CREATE TABLE clients (client_id varchar(20) primary key, user_name text, global_name text, avatar_url text, token varchar(16), refresh_token varchar(32), expires_on datetime, locale varchar(3), guilds json, options json);
++---------------+-------------+------+-----+---------+-------+
+| Field         | Type        | Null | Key | Default | Extra |
++---------------+-------------+------+-----+---------+-------+
+| client_id     | varchar(20) | NO   | PRI | NULL    |       |
+| user_name     | text        | YES  |     | NULL    |       |
+| global_name   | text        | YES  |     | NULL    |       |
+| avatar_url    | text        | YES  |     | NULL    |       |
+| token         | varchar(16) | YES  |     | NULL    |       |
+| refresh_token | varchar(32) | YES  |     | NULL    |       |
+| expires_on    | datetime    | YES  |     | NULL    |       |
+| locale        | varchar(3)  | YES  |     | NULL    |       |
+| guilds        | json        | YES  |     | NULL    |       |
+| options       | json        | YES  |     | NULL    |       |
++---------------+-------------+------+-----+---------+-------+
 
 ### videoCache
 

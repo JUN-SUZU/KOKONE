@@ -688,7 +688,25 @@ async function playMusic(connection, videoId, guildId) {
     try {
         let info = await ytdl.getInfo(videoId);
         let audioFormats = ytdl.filterFormats(info.formats, 'audioonly');
-        if (audioFormats.filter(format => format.container === 'mp4' && format.audioCodec === 'mp4a.40.2').length == 0) {//mp4 aac
+        if (audioFormats.filter(format => {
+            if (format.container === 'mp4' && format.audioCodec === 'mp4a.40.2') {
+                // xtags のチェック
+                try {
+                    const xtagsRaw = format.xtags;
+                    if (xtagsRaw) {
+                        const decoded = Buffer.from(xtagsRaw, 'base64').toString('utf8');
+                        if (decoded.includes('dubbed-auto')) {
+                            return false; // dubbedなら除外
+                        }
+                    }
+                } catch (e) {
+                    console.error('xtags decode error:', e);
+                }
+                return true; // mp4 + aac + dubbedでない
+            }
+            return false;
+        }).length === 0) {
+            // 条件に合う音声がなければ restricted.mp3 を使う
             stream = fs.createReadStream('./restricted.mp3');
         }
     } catch (error) {
@@ -697,7 +715,26 @@ async function playMusic(connection, videoId, guildId) {
     }
     if (!stream) {
         stream = ytdl(`https://www.youtube.com/watch?v=${videoId}`, {
-            filter: format => format.container === 'mp4' && format.audioCodec === 'mp4a.40.2',
+            filter: format => {
+                const isMp4Aac = format.container === 'mp4' && format.audioCodec === 'mp4a.40.2';
+        
+                if (!isMp4Aac) return false;
+        
+                // xtags デコードして 'dubbed-auto' を含んでいたら除外
+                if (format.xtags) {
+                    try {
+                        const decoded = Buffer.from(format.xtags, 'base64').toString('utf8');
+                        if (decoded.includes('dubbed-auto')) {
+                            return false;
+                        }
+                    } catch (e) {
+                        console.error('xtags decode error:', e);
+                    }
+                }
+        
+                // 条件クリア（mp4+aac かつ dubbed でない）
+                return true;
+            },
             quality: 'highestaudio',
             highWaterMark: 32 * 1024 * 1024
         });

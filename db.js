@@ -1,8 +1,9 @@
-const mysql = require('mysql2');
-const util = require('util');
-const config = require('./config.json');
+import mysql from 'mysql2';
+import util from 'util';
+import { readFileSync } from 'fs';
+const config = JSON.parse(readFileSync('./config.json', 'utf8'));
 
-class DB {
+export default class {
     constructor() {
         const connect = () => {
             this.connection = mysql.createConnection({
@@ -155,5 +156,3 @@ class DB {
         }
     }
 }
-
-module.exports = DB;

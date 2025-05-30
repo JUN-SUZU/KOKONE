@@ -1,45 +1,53 @@
-const config = require('./config.json');
+import { readFileSync, existsSync } from 'fs';
+const config = JSON.parse(readFileSync('./config.json', 'utf8'));
+process.title = 'KOKONE';
+
 // database
-const DB = require('./db.js');
+import DB from './db.js';
 const db = new DB();
 
 // discord.js
-const { ActionRowBuilder, ActivityType, ChannelType, Client, Collection,
+import {
+    ActionRowBuilder, ActivityType, ChannelType, Client, Collection,
     EmbedBuilder, Events, GatewayIntentBits, Partials, PermissionsBitField,
-    StringSelectMenuBuilder, ThreadAutoArchiveDuration } = require('discord.js');
-const { entersState, AudioPlayerStatus, AudioReceiveStream, createAudioPlayer, createAudioResource, EndBehaviorType,
-    joinVoiceChannel, getVoiceConnection, NoSubscriberBehavior, StreamType } = require('@discordjs/voice');
+    StringSelectMenuBuilder, ThreadAutoArchiveDuration
+} from 'discord.js';
+import {
+    entersState, AudioPlayerStatus, AudioReceiveStream, createAudioPlayer, createAudioResource, EndBehaviorType,
+    joinVoiceChannel, getVoiceConnection, NoSubscriberBehavior, StreamType
+} from '@discordjs/voice';
 
 // search on youtube
-const youtubeNode = require('youtube-node');
+import youtubeNode from 'youtube-node';
 const youtube = new youtubeNode();
 youtube.setKey(config.youtubeApiKey);
 youtube.addParam('type', 'video');
 
 // deploy from youtube playlist
-const ytpl = require('ytpl');
+import ytpl from 'ytpl';
 
 // download from youtube
-const ytdl = require('@distube/ytdl-core');
+import ytdl from '@distube/ytdl-core';
+import { Innertube, UniversalCache, Utils } from 'youtubei.js';
 
 // dashboard
-const http = require('http');
-const WebSocket = require('ws');
-
-// const WebSocketManager = require('./util/ws.js');
-// const RESTManager = require('./util/rest.js');
-// const wsm = new WebSocketManager();
-// const rest = new RESTManager(wsm);
-// let VoiceState = {};
+import http from 'http';
+import WebSocket from 'ws';
 
 // other modules
-const fs = require('fs');
-const path = require('path');
-const cron = require('node-cron');
-const { on } = require('events');
-const { type } = require('node:os');
-const wait = require('node:timers/promises').setTimeout;
+import fs from 'fs';
+import path from 'path';
+import cron from 'node-cron';
+import { on } from 'events';
+import { type } from 'node:os';
+import { setTimeout as wait } from 'node:timers/promises';
+
 const baseColor = '#ff207d';
+
+// __dirname の代替
+import { fileURLToPath } from 'url';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 
 const client = new Client({
@@ -117,13 +125,25 @@ client.on('messageCreate', async (message) => {
 });
 
 function registerSlashCommands(guild) {
-    const commands = [];
     const commandFiles = fs.readdirSync(path.join(__dirname, './discordCommands')).filter(file => file.endsWith('.js'));
-    for (const file of commandFiles) {
-        const command = require(`./discordCommands/${file}`);
-        commands.push(command.data.toJSON());
-        guild.commands.create(command.data);
+    async function registerCommands(file) {
+        const command = (await import(`./discordCommands/${file}`)).default;
+        if (!command.data) return;
+        try {
+            await guild.commands.create(command.data);
+            console.log(`Registered command: ${command.data.name}`);
+        } catch (error) {
+            console.error(`Error registering command ${command.data.name}:`, error);
+        }
     }
+    const commandPromises = commandFiles.map(registerCommands);
+    Promise.all(commandPromises)
+        .then(() => {
+            console.log(`All commands registered in ${guild.name}`);
+        })
+        .catch(error => {
+            console.error(`Error registering commands in ${guild.name}:`, error);
+        });
     console.log(`Command registration completed in ${guild.name}`);
 }
 
@@ -684,64 +704,40 @@ async function playMusic(connection, videoId, guildId) {
     }
     history.push(videoId);
     await db.guilds.history.set(guildId, history);
+    const yt = await Innertube.create({ cache: new UniversalCache(false), generate_session_locally: true });
+
+    // Fired when waiting for the user to authorize the sign in attempt.
+    yt.session.on('auth-pending', (data) => {
+        console.log(`Go to ${data.verification_url} in your browser and enter code ${data.user_code} to authenticate.`);
+    });
+    // Fired when authentication is successful.
+    yt.session.on('auth', ({ credentials }) => {
+        console.log('Sign in successful:', credentials);
+    });
+
+    // Sign in with OAuth2 credentials
+    await yt.session.signIn();
+
+    // You may cache the session for later use
+    // If you use this, the next call to signIn won't fire 'auth-pending' instead just 'auth'.
+    await yt.session.oauth.cacheCredentials();
+    
+    // Get the audio stream for the video
     let stream;
     try {
-        let info = await ytdl.getInfo(videoId);
-        let audioFormats = ytdl.filterFormats(info.formats, 'audioonly');
-        if (audioFormats.filter(format => {
-            if (format.container === 'mp4' && format.audioCodec === 'mp4a.40.2') {
-                // xtags のチェック
-                try {
-                    const xtagsRaw = format.xtags;
-                    if (xtagsRaw) {
-                        const decoded = Buffer.from(xtagsRaw, 'base64').toString('utf8');
-                        if (decoded.includes('dubbed-auto')) {
-                            return false; // dubbedなら除外
-                        }
-                    }
-                } catch (e) {
-                    console.error('xtags decode error:', e);
-                }
-                return true; // mp4 + aac + dubbedでない
-            }
-            return false;
-        }).length === 0) {
-            // 条件に合う音声がなければ restricted.mp3 を使う
-            stream = fs.createReadStream('./restricted.mp3');
-        }
-    } catch (error) {
-        // play restricted.mp3
-        stream = fs.createReadStream('./restricted.mp3');
-    }
-    if (!stream) {
-        stream = ytdl(`https://www.youtube.com/watch?v=${videoId}`, {
-            filter: format => {
-                const isMp4Aac = format.container === 'mp4' && format.audioCodec === 'mp4a.40.2';
-        
-                if (!isMp4Aac) return false;
-        
-                // xtags デコードして 'dubbed-auto' を含んでいたら除外
-                if (format.xtags) {
-                    try {
-                        const decoded = Buffer.from(format.xtags, 'base64').toString('utf8');
-                        if (decoded.includes('dubbed-auto')) {
-                            return false;
-                        }
-                    } catch (e) {
-                        console.error('xtags decode error:', e);
-                    }
-                }
-        
-                // 条件クリア（mp4+aac かつ dubbed でない）
-                return true;
-            },
-            quality: 'highestaudio',
-            highWaterMark: 32 * 1024 * 1024
+        stream = await yt.download(videoId, {
+            type: 'audio',
+            quality: 'best',
+            format: 'mp4',
+            client: 'TV'
         });
-        const musicLength = await ytdl.getBasicInfo(videoId).then(info => info.videoDetails.lengthSeconds);
-        playingTime[guildId] = { totalPlayedTime: 0, playStartTime: Date.now(), musicLength: musicLength };
+    } catch (error) {
+        console.error(`Failed to download video: ${videoId}`, error);
+        stream = fs.createReadStream('./restricted.mp3'); // play restricted.mp3 if failed to download
+        return;
     }
-
+    const musicLength = await ytdl.getBasicInfo(videoId).then(info => info.videoDetails.lengthSeconds);
+    playingTime[guildId] = { totalPlayedTime: 0, playStartTime: Date.now(), musicLength: musicLength };
     const resource = createAudioResource(stream, {
         inputType: StreamType.WebmOpus,
         inlineVolume: true

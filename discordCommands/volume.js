@@ -1,9 +1,9 @@
-const { SlashCommandBuilder } = require('discord.js');
+import { SlashCommandBuilder } from 'discord.js';
 
-module.exports = {
-	data: new SlashCommandBuilder()
-		.setName('volume')
-		.setDescription('音量を変更します。')
+export default {
+    data: new SlashCommandBuilder()
+        .setName('volume')
+        .setDescription('音量を変更します。')
         .addNumberOption(option =>
             option
                 .setName('volume')

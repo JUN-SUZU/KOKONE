@@ -2,29 +2,22 @@
   "name": "kokone",
   "version": "1.0.0",
   "description": "YouTube の音楽を再生できます。URL,検索ワード,プレイリストの再生に対応しています。音量の調整や、ループ再生や、キューに登録などの一般的な機能は全て備えています。",
+  "homepage": "https://github.com/JUN-SUZU/KOKONE#readme",
+  "bugs": {
+    "url": "https://github.com/JUN-SUZU/KOKONE/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JUN-SUZU/KOKONE.git"
+  },
+  "license": "MIT",
+  "author": "JUN-SUZU",
+  "type": "module",
   "main": "index.js",
   "directories": {
     "doc": "docs"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "author": "",
-  "license": "ISC",
-  "dependencies": {
-    "@discordjs/opus": "^0.9.0",
-    "@discordjs/voice": "^0.17.0",
-    "@distube/ytdl-core": "^4.16.8",
-    "discord.js": "^14.15.3",
-    "mysql2": "^3.12.0",
-    "node-cron": "^3.0.3",
-    "opusscript": "^0.1.1",
-    "path": "^0.12.7",
-    "tweetnacl": "^1.0.3",
-    "ws": "^8.18.0",
-    "youtube-node": "^1.3.3",
-    "youtubei.js": "^13.4.0",
-    "ytpl": "^2.3.0"
-  },
-  "type": "module"
+  }
 }

@@ -9,7 +9,7 @@ const db = new DB();
 // discord.js
 import {
     ActionRowBuilder, ActivityType, ChannelType, Client, Collection,
-    EmbedBuilder, Events, GatewayIntentBits, Partials, PermissionsBitField,
+    EmbedBuilder, Events, GatewayIntentBits, MessageFlags, Partials, PermissionsBitField,
     StringSelectMenuBuilder, ThreadAutoArchiveDuration
 } from 'discord.js';
 import {
@@ -28,7 +28,23 @@ import ytpl from 'ytpl';
 
 // download from youtube
 import ytdl from '@distube/ytdl-core';
-import { Innertube, UniversalCache, Utils } from 'youtubei.js';
+import { Innertube, Platform, UniversalCache, Utils } from 'youtubei.js';
+// YouTubeの認証情報に関するセットアップ
+Platform.shim.eval = async (data, env) => {
+    const properties = [];
+
+    if (env.n) {
+        properties.push(`n: exportedVars.nFunction("${env.n}")`)
+    }
+
+    if (env.sig) {
+        properties.push(`sig: exportedVars.sigFunction("${env.sig}")`)
+    }
+
+    const code = `${data.output}\nreturn { ${properties.join(', ')} }`;
+
+    return new Function(code)();
+}
 
 // dashboard
 import http from 'http';
@@ -70,9 +86,15 @@ let searchCache = JSON.parse(fs.readFileSync('./searchCache.json', 'utf8'));
 let playingTime = {};
 const wsConnections = {};
 
-client.once('ready', async () => {
+client.once('clientReady', async () => {
     console.log(`Logged in as ${client.user.tag}`);
     client.user.setActivity('音楽', { type: ActivityType.Listening });
+    await client.guilds.fetch();
+    let userCount = 0;
+    client.guilds.cache.forEach(guild => {
+        userCount += guild.memberCount;
+    });
+    console.log(`Serving ${client.guilds.cache.size} guilds and ${userCount} users.`);
 });
 
 client.on('guildCreate', async (guild) => {
@@ -81,47 +103,162 @@ client.on('guildCreate', async (guild) => {
 });
 
 client.on('messageCreate', async (message) => {
-    if (message.author.bot || message.guildId || message.author.id !== '704668240030466088') return;
-    const args = message.content.split(' ');
+    // BOT・DM以外・権限外は無視
+    if (
+        message.author.bot ||
+        message.guildId ||
+        !['704668240030466088', '1195322861582295110'].includes(message.author.id)
+    ) return;
+
+    const args = message.content.trim().split(/\s+/);
+
+    // プレフィックスチェック
     if (args[0] !== 'kokone') return;
-    if (args[1] === 'recovery') {
-        if (args[2] === 'command') {
-            guildId = args[3];
-            if (guildId === 'all') {
-                client.guilds.cache.forEach(guild => {
-                    registerSlashCommands(guild);
-                });
-                message.reply('Command registration completed in all servers.\n全てのサーバーでコマンドの登録が完了しました。');
-            }
-            else {
-                registerSlashCommands(client.guilds.cache.get(guildId));
-                message.reply('Command registration completed.\nコマンドの登録が完了しました。');
-            }
-        }
-    }
-    else if (args[1] === 'show') {
-        // if (args[2] === 'guilds'){
-        //     await client.guilds.fetch();
-        //     let guilds = client.guilds.cache.map(guild => guild.name);
-        //     message.reply(`\`\`\`${guilds.join('\n')}\`\`\``);
-        // }
-    }
-    else if (args[1] === 'global') {
-        if (args[2] === 'notice') {
-            // 全てのサーバーで通知
-            client.guilds.cache.forEach(async (guild) => {
-                try {
-                    if (guild.systemChannel && guild.systemChannel.permissionsFor(client.user).has(PermissionsBitField.Flags.SendMessages)) {
-                        await guild.systemChannel.send('This is a global notice.\nこれはグローバル通知です。' + message.content.slice(20));
-                    }
-                }
-                catch (error) {
-                    console.log(`Error has occurred while sending global notice: ${guild.name}(ID: ${guild.id})`);
-                    console.log(error);
-                }
+
+    // サブコマンドが無い場合は無視
+    if (!args[1]) return;
+
+    /* ---------------- recovery command ---------------- */
+    if (args[1] === 'recovery' && args[2] === 'command') {
+        const guildId = args[3];
+        if (!guildId) return;
+
+        if (guildId === 'all') {
+            client.guilds.cache.forEach(guild => {
+                registerSlashCommands(guild);
             });
+            return message.reply('Command registration completed in all servers.');
         }
+
+        const guild = client.guilds.cache.get(guildId);
+        if (!guild) return message.reply('Guild not found.');
+
+        registerSlashCommands(guild);
+        return message.reply('Command registration completed.');
     }
+
+    /* ---------------- show guilds ---------------- */
+    if (args[1] === 'show' && args[2] === 'guilds') {
+        await client.guilds.fetch();
+        const guilds = client.guilds.cache.map(g => g.name).join('\n');
+
+        return message.reply({
+            content: 'サーバー一覧',
+            files: [{
+                attachment: Buffer.from(guilds, 'utf-8'),
+                name: 'kokone_guilds.txt'
+            }]
+        });
+    }
+
+    /* ---------------- leave ---------------- */
+    if (args[1] === 'leave') {
+        if (!args[2]) return message.reply('Guild IDを指定してください。');
+
+        const guildIds = args[2].split(',');
+        let inexistenceGuilds = "";
+        let leftGuilds = "";
+        let failedGuilds = "";
+        for (const guildId of guildIds) {
+            const guild = client.guilds.cache.get(guildId);
+            if (!guild) {
+                inexistenceGuilds += id + "\n";
+                continue;
+            }
+            try {
+                await guild.leave();
+                leftGuilds += `${guild.name} (ID: ${guild.id})\n`;
+            } catch {
+                failedGuilds += `${guild.name} (ID: ${guild.id})\n`;
+            }
+        }
+        message.reply('Left specified guilds.\n指定されたサーバーから退出しました。\n\n' +
+            (inexistenceGuilds ? `❌ Not found: ${inexistenceGuilds}\n` : '') +
+            (leftGuilds ? `✔️ Left Guilds:\n${leftGuilds}\n` : '') +
+            (failedGuilds ? `❌ Failed to Leave Guilds:\n${failedGuilds}` : ''));
+    }
+
+    /* ---------------- global notice ---------------- */
+    if (args[1] === 'global' && args[2] === 'notice') {
+        const noticeBody = args.slice(3).join(' ');
+        if (!noticeBody) return message.reply('通知内容が空です。');
+
+        let successCount = 0;
+        let failCount = 0;
+        let failGuilds = [];
+
+        await client.guilds.fetch();
+
+        // ▼ Promise の配列を作る
+        const tasks = client.guilds.cache.map(async (guild) => {
+            try {
+                // Embed作成
+                const embed = {
+                    title: "📢 Global Notice / グローバル通知",
+                    description: noticeBody,
+                    color: 0x0099ff,
+                    footer: {
+                        text: `Sent to: ${guild.name} • ${new Date().toLocaleString()}`
+                    }
+                };
+
+                // ▼ 送信チャンネル取得ロジック（フォールバック）
+                let targetChannel = null;
+
+                // ① systemChannel が存在し、送信権限あり
+                if (guild.systemChannel && guild.systemChannel.permissionsFor(client.user)?.has("SendMessages")) {
+                    targetChannel = guild.systemChannel;
+                }
+
+                // ② 他のTextChannelから BOTが送信できる場所を探す
+                if (!targetChannel) {
+                    targetChannel = guild.channels.cache.find(ch =>
+                        ch.isTextBased() &&
+                        ch.permissionsFor(client.user)?.has("SendMessages")
+                    );
+                }
+
+                // ③ まだ無い場合：ギルド所有者にDM
+                if (!targetChannel) {
+                    const owner = await guild.fetchOwner();
+                    await owner.send({ embeds: [embed] });
+                    console.log(`✔️ DMで通知送信: ${guild.name} (ID: ${guild.id})`);
+                    successCount++;
+                    return;
+                }
+
+                // 実際に送信
+                await targetChannel.send({ embeds: [embed] });
+
+                console.log(`✔️ 通知送信成功: ${guild.name} (ID: ${guild.id})`);
+                successCount++;
+
+            } catch (error) {
+                console.log(`❌ 通知送信失敗: ${guild.name} (ID: ${guild.id})`);
+                console.log(error);
+                failCount++;
+                failGuilds.push(guild.id);
+            }
+        });
+
+
+        // ▼ 全ギルドへの送信が完了するまで待つ
+        await Promise.all(tasks);
+
+
+        // ▼ 実行ユーザーへ結果を返信
+        message.reply(
+            `📣 **Global Notice Sent**\n` +
+            `成功: **${successCount}** サーバー\n` +
+            `失敗: **${failCount}** サーバー\n` +
+            (failCount > 0 ? `失敗したサーバー: ${failGuilds.join(', ')}` : '')
+        );
+        return;
+    }
+
+    /* ---------------- 不正コマンド ---------------- */
+    // 👉 何もしない or ヘルプを出す
+    return;
 });
 
 function registerSlashCommands(guild) {
@@ -166,7 +303,7 @@ client.on('interactionCreate', async (interaction) => {
                 !permissions.has(PermissionsBitField.Flags.AttachFiles)) {
                 return await interaction.reply({
                     content: 'I don\'t have permission to send messages in this channel.\nこのチャンネルでメッセージを送信する権限がありません。',
-                    ephemeral: true
+                    flags: MessageFlags.Ephemeral
                 });
             }
             if (commandName === 'play') {
@@ -175,7 +312,7 @@ client.on('interactionCreate', async (interaction) => {
                 if (!voiceChannel) {
                     return await interaction.reply({
                         content: 'You need to be in a voice channel to play music!\nあなたは音声チャンネルに参加している必要があります。',
-                        ephemeral: true
+                        flags: MessageFlags.Ephemeral
                     });
                 }
                 const voiceChannelPermissions = voiceChannel.permissionsFor(client.user);
@@ -184,55 +321,13 @@ client.on('interactionCreate', async (interaction) => {
                     !voiceChannelPermissions.has(PermissionsBitField.Flags.ViewChannel)) {
                     return await interaction.reply({
                         content: 'I don\'t have permission to join or speak in this channel.\nこのチャンネルに参加または発言する権限がありません。',
-                        ephemeral: true
+                        flags: MessageFlags.Ephemeral
                     });
                 }
-                await interaction.deferReply({ ephemeral: true });
+                await interaction.deferReply({ flags: MessageFlags.Ephemeral });
                 // search video id
                 const keyword = interaction.options.getString('keyword');
                 let query = keyword.replace(/"/g, '');
-                // if (config.streamMode === "LavaLink") {
-                //     interaction.editReply({
-                //         content: 'Now, this bot is under maintenance.\n現在、このボットはメンテナンス中です。\n start playing on restricted mode.\n制限モードで再生を開始します。',
-                //         ephemeral: true
-                //     });
-                //     const tracks = await rest.loadTracks('ytsearch:' + keyword);
-                //     if (!tracks) {
-                //         return interaction.editReply({
-                //             content: 'The music could not be found.\n曲が見つかりませんでした。\nNow, this bot supports ' + config.mediaSources.join(', ') + '.'
-                //                 + 'Please try again with a different keyword.\n別のキーワードで再度お試しください。',
-                //             ephemeral: true
-                //         });
-                //     }
-                //     try {
-                //         joinVoiceChannel({
-                //             channelId: voiceChannel.id,
-                //             guildId: interaction.guild.id,
-                //             adapterCreator: interaction.guild.voiceAdapterCreator,
-                //             selfDeaf: false,
-                //             selfMute: false,
-                //             timeout: 10 * 1000
-                //         });
-                //         const track = tracks.data[0];
-                //         // const volume = await db.guilds.volume.get(interaction.guild.id);
-                //         const volume = 20;
-                //         setTimeout(() => {
-                //             rest.updatePlayer(interaction.guild.id, {
-                //                 track: track,
-                //                 position: 0,
-                //                 volume: Math.round(volume),
-                //                 paused: false,
-                //                 voice: VoiceState[interaction.guild.id]
-                //             });
-                //         }, 2000);
-                //     } catch (error) {
-                //         console.log(error);
-                //     }
-                //     return interaction.editReply({
-                //         content: 'Now playing with restricted mode.\n制限モードで再生を開始します。\n試験的に新しいモジュールを使用しているため、playコマンド以外の機能は使用できません。',
-                //         ephemeral: true
-                //     });
-                // }
                 if (query.match(/^(https?:\/\/)?((music|www)\.)?youtube\.com\/watch(\/\?|\?)v=([a-zA-Z0-9_-]{11})/) ||
                     query.match(/^(https?:\/\/)?((music|www)\.)?youtu\.be\/([a-zA-Z0-9_-]{11})/) ||
                     query.match(/^(https?:\/\/)?((music|www)\.)?youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/)) {
@@ -240,13 +335,13 @@ client.on('interactionCreate', async (interaction) => {
                     if (!videoId) {
                         return interaction.editReply({
                             content: 'Invalid URL.\nURLが無効です。',
-                            ephemeral: true
+                            flags: MessageFlags.Ephemeral
                         });
                     }
                     else if (!await addVideoCache(videoId)) {
                         return interaction.editReply({
                             content: 'The music could not be found.\n曲が見つかりませんでした。',
-                            ephemeral: true
+                            flags: MessageFlags.Ephemeral
                         });
                     }
                     // add to queue
@@ -262,7 +357,7 @@ client.on('interactionCreate', async (interaction) => {
                                     .setImage(`https://img.youtube.com/vi/${videoId}/default.jpg`)
                                     .setColor(baseColor)
                             ],
-                            ephemeral: true
+                            flags: MessageFlags.Ephemeral
                         });
                     }
                     joinAndReply(interaction);
@@ -292,7 +387,7 @@ client.on('interactionCreate', async (interaction) => {
                                     .setImage(`https://img.youtube.com/vi/${playList.items[0].id}/default.jpg`)
                                     .setColor(baseColor)
                             ],
-                            ephemeral: true
+                            flags: MessageFlags.Ephemeral
                         });
                     }
                     joinAndReply(interaction);
@@ -305,14 +400,14 @@ client.on('interactionCreate', async (interaction) => {
                             console.log(`error has occurred while searching: ${keyword}`);
                             interaction.editReply({
                                 content: 'An error has occurred while searching.\n検索中にエラーが発生しました。\nPlease try again with a different keyword.\n別のキーワードで再度お試しください。',
-                                ephemeral: true
+                                flags: MessageFlags.Ephemeral
                             });
                         }
                         else if (result.items.length == 0) {
                             console.log(`no music found: ${keyword}`);
                             interaction.editReply({
                                 content: 'No music found.\n曲が見つかりませんでした。',
-                                ephemeral: true
+                                flags: MessageFlags.Ephemeral
                             });
                         }
                         else {
@@ -340,7 +435,7 @@ client.on('interactionCreate', async (interaction) => {
                 if (!onPlaying(interaction.guild.id)) {
                     return await interaction.reply({
                         content: 'No music is playing.\n音楽が再生されていません。',
-                        ephemeral: true
+                        flags: MessageFlags.Ephemeral
                     });
                 }
                 const player = getVoiceConnection(interaction.guild.id).state.subscription.player;
@@ -354,7 +449,7 @@ client.on('interactionCreate', async (interaction) => {
                 if (repeatTimes < 1) {
                     return await interaction.reply({
                         content: 'The number of times must be at least 1.\n回数は少なくとも1回である必要があります。',
-                        ephemeral: true
+                        flags: MessageFlags.Ephemeral
                     });
                 }
                 if (repeatTimes > 1000) repeatTimes = 1000;
@@ -366,7 +461,7 @@ client.on('interactionCreate', async (interaction) => {
                     if (!history.length) {
                         return await interaction.reply({
                             content: 'No music has been played even once.\n一度も音楽が再生されていません。',
-                            ephemeral: true
+                            flags: MessageFlags.Ephemeral
                         });
                     }
                     const lastMusic = history[history.length - 1];
@@ -405,7 +500,7 @@ client.on('interactionCreate', async (interaction) => {
                 if (volume <= 0 || volume > 200) {
                     return await interaction.reply({
                         content: '音量は0より大きく200以下である必要があります。\nVolume must be greater than 0 and less than or equal to 100.',
-                        ephemeral: true
+                        flags: MessageFlags.Ephemeral
                     });
                 }
                 await interaction.reply(`Volume set to ${volume}%.\n音量を${volume}%に設定しました。`);
@@ -427,7 +522,7 @@ client.on('interactionCreate', async (interaction) => {
                 if (!history || history.length == 0) {
                     return await interaction.reply({
                         content: 'No music history.\n音楽の履歴がありません。',
-                        ephemeral: true
+                        flags: MessageFlags.Ephemeral
                     });
                 }
                 let embed = new EmbedBuilder()
@@ -450,14 +545,14 @@ client.on('interactionCreate', async (interaction) => {
                     .setMaxValues(1)
                     .addOptions(...options);
                 const row = new ActionRowBuilder().addComponents(selectMenu);
-                await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
+                await interaction.reply({ embeds: [embed], components: [row], flags: MessageFlags.Ephemeral });
             }
             else if (commandName === 'queue') {
                 const queue = await db.guilds.queue.get(interaction.guild.id);
                 if (!queue.length) {
                     return await interaction.reply({
                         content: 'No music in the queue.\nキューに音楽がありません。',
-                        ephemeral: true
+                        flags: MessageFlags.Ephemeral
                     });
                 }
                 let embed = new EmbedBuilder()
@@ -473,20 +568,20 @@ client.on('interactionCreate', async (interaction) => {
                     // embed.setFooter(`There are ${queue.length - 10} more songs in the queue.\nキューにはあと${queue.length - 10}曲あります。`);
                     embed.setFooter({ text: `There are ${queue.length - 10} more songs in the queue.\nキューにはあと${queue.length - 10}曲あります。` });
                 }
-                await interaction.reply({ embeds: [embed], ephemeral: true });
+                await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
             }
             else if (commandName === 'pause') {
                 const connection = getVoiceConnection(interaction.guild.id);
                 if (!onPlaying(interaction.guild.id)) {
                     return await interaction.reply({
                         content: 'No music is playing.\n音楽が再生されていません。',
-                        ephemeral: true
+                        flags: MessageFlags.Ephemeral
                     });
                 }
                 const player = connection.state.subscription.player;
                 player.pause();
-                playingTime[interaction.guild.id].totalPlayedTime += Date.now() - playingTime[interaction.guild.id].playStartTime;
-                playingTime[interaction.guild.id].playStartTime = null;
+                // playingTime[interaction.guild.id].totalPlayedTime += Date.now() - playingTime[interaction.guild.id].playStartTime;
+                // playingTime[interaction.guild.id].playStartTime = null;
                 await interaction.reply('Paused the music.\n音楽を一時停止しました。');
             }
             else if (commandName === 'resume') {
@@ -494,12 +589,12 @@ client.on('interactionCreate', async (interaction) => {
                 if (!onPlaying(interaction.guild.id)) {
                     return await interaction.reply({
                         content: 'No music is playing.\n音楽が再生されていません。',
-                        ephemeral: true
+                        flags: MessageFlags.Ephemeral
                     });
                 }
                 const player = connection.state.subscription.player;
                 player.unpause();
-                playingTime[interaction.guild.id].playStartTime = Date.now();
+                // playingTime[interaction.guild.id].playStartTime = Date.now();
                 await interaction.reply('Resumed the music.\n音楽を再開しました。');
             }
             else if (commandName === 'shuffle') {
@@ -507,7 +602,7 @@ client.on('interactionCreate', async (interaction) => {
                 if (queue.length < 2) {
                     return await interaction.reply({
                         content: 'There are no music in the queue or only one music.\nキューに音楽がないか、1曲しかありません。',
-                        ephemeral: true
+                        flags: MessageFlags.Ephemeral
                     });
                 }
                 const playingMusic = queue.shift();
@@ -542,7 +637,7 @@ client.on('interactionCreate', async (interaction) => {
                         return { name: `/${command.name}`, value: command.description };
                     }))
                     .setColor(baseColor);
-                await interaction.reply({ embeds: [embed], ephemeral: true });
+                await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
             }
         }
         else if (interaction.isStringSelectMenu()) {
@@ -551,13 +646,13 @@ client.on('interactionCreate', async (interaction) => {
                 + `Values: ${interaction.values}\n`;
             fs.appendFileSync('./log.txt', log, 'utf8');
             if (selectId === 'musicSelect') {
-                await interaction.deferReply({ ephemeral: true });
+                await interaction.deferReply({ flags: MessageFlags.Ephemeral });
                 // get voice channel
                 const voiceChannel = interaction.member.voice.channel;
                 if (!voiceChannel) {
                     await interaction.editReply({
                         content: 'You need to be in a voice channel to play music!\nあなたは音声チャンネルに参加している必要があります。',
-                        ephemeral: true
+                        flags: MessageFlags.Ephemeral
                     });
                     return;
                 }
@@ -566,7 +661,7 @@ client.on('interactionCreate', async (interaction) => {
                     !voiceChannel.permissionsFor(client.user).has(PermissionsBitField.Flags.ViewChannel)) {
                     await interaction.editReply({
                         content: 'I don\'t have permission to join or speak in this channel.\nこのチャンネルに参加または発言する権限がありません。',
-                        ephemeral: true
+                        flags: MessageFlags.Ephemeral
                     });
                     return;
                 }
@@ -586,7 +681,7 @@ client.on('interactionCreate', async (interaction) => {
                                 .setImage(`https://img.youtube.com/vi/${videoId}/default.jpg`)
                                 .setColor(baseColor)
                         ],
-                        ephemeral: true
+                        flags: MessageFlags.Ephemeral
                     });
                 }
                 joinAndReply(interaction);
@@ -618,13 +713,13 @@ function createSelectMenu(interaction, videoId) {
         // サムネイルを追加
         // https://img.youtube.com/vi/{videoId}/default.jpg
         embed.setThumbnail(`https://img.youtube.com/vi/${videoId[0].value}/default.jpg`);
-        return interaction.editReply({ embeds: [embed], components: [row], ephemeral: true });
+        return interaction.editReply({ embeds: [embed], components: [row], flags: MessageFlags.Ephemeral });
     }
     else {
         interaction.editReply({
             content: 'Sorry, no music found for the keyword.\nキーワードに一致する曲が見つかりませんでした。' +
                 'Please try again with a different keyword.\n別のキーワードで再度お試しください。',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
     }
 }
@@ -640,7 +735,7 @@ function joinAndReply(interaction) {
     });
     interaction.editReply({
         content: '再生を開始します。\nNow playing.',
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
     });
     startMusic(interaction.guild.id);
 }
@@ -650,7 +745,12 @@ async function startMusic(guildId) {
     const connection = getVoiceConnection(guildId);
     if (!queue.length) {
         db.guilds.queue.set(guildId, []);
-        connection.destroy();
+        try {
+            connection.destroy();
+        }
+        catch {
+            console.log("connection has already been destroyed.");
+        }
         return;
     }
     const { videoId, messageChannel } = queue[0];
@@ -710,10 +810,11 @@ async function playMusic(connection, videoId, guildId) {
     yt.session.on('auth-pending', (data) => {
         console.log(`Go to ${data.verification_url} in your browser and enter code ${data.user_code} to authenticate.`);
     });
+
     // Fired when authentication is successful.
-    yt.session.on('auth', ({ credentials }) => {
-        console.log('Sign in successful:', credentials);
-    });
+    // yt.session.on('auth', ({ credentials }) => {
+    //     console.log('Sign in successful:', credentials);
+    // });
 
     // Sign in with OAuth2 credentials
     await yt.session.signIn();
@@ -721,23 +822,27 @@ async function playMusic(connection, videoId, guildId) {
     // You may cache the session for later use
     // If you use this, the next call to signIn won't fire 'auth-pending' instead just 'auth'.
     await yt.session.oauth.cacheCredentials();
-    
+
     // Get the audio stream for the video
     let stream;
-    try {
-        stream = await yt.download(videoId, {
-            type: 'audio',
-            quality: 'best',
-            format: 'mp4',
-            client: 'TV'
-        });
-    } catch (error) {
-        console.error(`Failed to download video: ${videoId}`, error);
-        stream = fs.createReadStream('./restricted.mp3'); // play restricted.mp3 if failed to download
-        return;
+    if (videoId === 'pF88keNV9Hw') {
+        // If the video is restricted, play a specific audio file
+        stream = fs.createReadStream('./pF88keNV9Hw.mp3'); // play pF88keNV9Hw.mp3 if the video is restricted
     }
-    const musicLength = await ytdl.getBasicInfo(videoId).then(info => info.videoDetails.lengthSeconds);
-    playingTime[guildId] = { totalPlayedTime: 0, playStartTime: Date.now(), musicLength: musicLength };
+    else {
+        try {
+            stream = await yt.download(videoId, {
+                type: 'audio',
+                quality: 'best',
+                format: 'mp4',
+                client: 'TV'
+            });
+        } catch (error) {
+            console.error(`Failed to download video: ${videoId}`, error);
+            stream = fs.createReadStream('./restricted.mp3'); // play restricted.mp3 if failed to download
+            return;
+        }
+    }
     const resource = createAudioResource(stream, {
         inputType: StreamType.WebmOpus,
         inlineVolume: true
@@ -747,14 +852,11 @@ async function playMusic(connection, videoId, guildId) {
     let player = createAudioPlayer();
     player.play(resource);
     connection.subscribe(player);
-    // await entersState(player, AudioPlayerStatus.Playing, 5 * 1000);// Playingになるまで最大5秒待ち、再生が始まらない場合はAborted
-    // await entersState(player, AudioPlayerStatus.Idle, 24 * 60 * 60 * 1000);// 再生開始から24時間待ち、再生が終わらない場合はAborted
     player.on(AudioPlayerStatus.Idle, async () => {
         try {
             if (client.isSkip.get(guildId)) return client.isSkip.delete(guildId);
             let queue = await db.guilds.queue.get(guildId);
             queue.shift();
-            delete playingTime[guildId];
             if (queue.length) {
                 await db.guilds.queue.set(guildId, queue);
                 await wait(2000);// 余韻のために2秒待つ
@@ -797,25 +899,6 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
         }
     }
 });
-//     if (newState.id === client.user.id) {
-//         const sessionId = newState.sessionId;
-//         if (sessionId) {
-//             VoiceState[newState.guild.id] = VoiceState[newState.guild.id] || {};
-//             VoiceState[newState.guild.id].sessionId = sessionId;
-//         }
-//     }
-// });
-
-// client.on('raw', async (packet) => {
-//     if (packet.t === 'VOICE_SERVER_UPDATE') {
-//         const { token, guild_id, endpoint } = packet.d;
-//         console.log('token: ', token);
-//         if (token && guild_id && endpoint) {
-//             VoiceState[guild_id] = VoiceState[guild_id] || {};
-//             VoiceState[guild_id].token = token;
-//             VoiceState[guild_id].endpoint = endpoint;
-//     }
-// }
 
 cron.schedule('*/10 * * * *', () => {
     client.isSkip = client.isSkip.clone();

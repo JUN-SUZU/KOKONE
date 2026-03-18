@@ -80,7 +80,7 @@ const client = new Client({
     ]
 });
 
-client.isSkip = new Collection();
+client.isSkip = new Collection();// TODO: skipかどうかの判定がなくても自動で次の音楽が再生されるため、このフラグは不要
 let searchCache = JSON.parse(fs.readFileSync('./searchCache.json', 'utf8'));
 const localDownloadingList = new Set();// このプロセスでダウンロード中のvideoId
 let playingTime = {};
@@ -893,7 +893,7 @@ async function playMusic(connection, videoId, guildId) {
                     try {
                         fs.renameSync(tmpPath, filePath);
                     } catch (e) {
-                        console.error(`一時ファイルのリネームに失敗しました: ${videoId}`);
+                        console.error(`一時ファイルのリネームに失敗しました: ${videoId}`);// TODO: エラーログに詳細 e を含める
                         fs.unlink(tmpPath, (unlinkErr) => {
                             if (unlinkErr && unlinkErr.code !== 'ENOENT') {
                                 console.error(`不完全な一時キャッシュファイルの削除に失敗しました: ${tmpPath}`, unlinkErr);
@@ -1137,7 +1137,7 @@ const server = http.createServer((req, res) => {
 const wsServer = new WebSocket.Server({ server });
 
 wsServer.on('connection', (ws, request) => {
-    const ipadr = request.headers['x-forwarded-for'].split(/\s*,\s*/)[0];
+    const ipadr = request.headers['x-forwarded-for'].split(/\s*,\s*/)[0];// TODO: NGINX以外でテストできるようgetIPAddress()を使う
     ws.on('message', async (message) => {
         try {
             const data = JSON.parse(message);
@@ -1253,7 +1253,7 @@ function parseCookies(req) {
 // ==========================================
 // グレースフル・シャットダウン (強制終了時の処理)
 // ==========================================
-async function handleShutdown(signal) {
+async function handleShutdown(signal) {// TODO: 予期せぬエラーで落ちた場合に終了コードを反映させる
     // 自身のShard番号を安全に取得
     const shardId = client.shard?.ids[0] ?? 'Not in sharding';
     

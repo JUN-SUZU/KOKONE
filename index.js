@@ -80,6 +80,7 @@ const client = new Client({
 
 client.isSkip = new Collection();
 let searchCache = JSON.parse(fs.readFileSync('./searchCache.json', 'utf8'));
+const downloadingList = new Set();// ダウンロード中のvideoId
 let playingTime = {};
 const wsConnections = {};
 
@@ -841,6 +842,16 @@ async function playMusic(connection, videoId, guildId) {
     await yt.session.oauth.cacheCredentials();
 
 
+
+    let duration = 0;
+    try {
+        const info = await ytdl.getBasicInfo(videoId);
+        duration = parseInt(info.videoDetails.lengthSeconds || 0, 10);
+    } catch (e) {
+        console.error(`情報取得に失敗しました: ${videoId}`, e.message);
+    }
+    const isLongVideo = duration > 1200;// 動画の長さ(秒)
+
     // Get the audio stream for the video
     let stream;
 
@@ -851,27 +862,29 @@ async function playMusic(connection, videoId, guildId) {
         // If the video is restricted, play a specific audio file
         stream = fs.createReadStream('./pF88keNV9Hw.mp3'); // play pF88keNV9Hw.mp3 if the video is restricted
     }
-    else if (fs.existsSync(filePath)) {
+    else if (fs.existsSync(filePath) && !downloadingList.has(videoId)) {
         // ローカルファイルからの再生
         stream = fs.createReadStream(filePath);
     }
     else {
-        // YouTubeからダウンロードしながら再生
+        // YouTubeからダウンロード・保存しながら再生
         try {
+            const shouldSave = !downloadingList.has(videoId) && !isLongVideo;
+            if (shouldSave) {
+                downloadingList.add(videoId);
+            }
             const rawStream = await yt.download(videoId, {
                 type: 'audio',
                 quality: 'best',
                 format: 'mp4',
                 client: 'TV'
             });
-            const nodeStream = Readable.fromWeb(rawStream);
 
-            const duration = await ytdl.getBasicInfo(videoId).then(info => info.videoDetails.lengthSeconds);
-            const isLongVideo = duration > 1200;// 動画の長さ(秒)
-            if (isLongVideo) {
-                stream = nodeStream;
-            } else {
-                // durationより以下の場合のみ保存
+            if (!shouldSave) {
+                stream = Readable.fromWeb(rawStream);
+            }
+            else {
+                const nodeStream = Readable.fromWeb(rawStream);
                 stream = new PassThrough();
                 if (!fs.existsSync(cacheDir)) {
                     fs.mkdirSync(cacheDir);
@@ -881,11 +894,27 @@ async function playMusic(connection, videoId, guildId) {
                 // 取得した音楽データを「Discord再生用」と「ファイル保存用」の両方に流す（分岐）
                 nodeStream.pipe(stream);
                 nodeStream.pipe(fileStream);
+                // 書き込み完了時、エラー発生時に削除
+                fileStream.on('finish', () => {
+                    downloadingList.delete(videoId);
+                });
+                fileStream.on('error', (err) => {
+                    console.error(`ファイル書き込みエラーが発生しました: ${videoId}`, err);
+                    downloadingList.delete(videoId);
+                    // ファイルが存在する場合のみ削除を試みる
+                    fs.unlink(filePath, (unlinkErr) => {
+                        if (unlinkErr && unlinkErr.code !== 'ENOENT') {
+                            console.error(`不完全なキャッシュファイルの削除に失敗しました: ${filePath}`, unlinkErr);
+                        } else {
+                            console.log(`不完全なキャッシュファイルを削除しました: ${filePath}`);
+                        }
+                    });
+                });
             }
         } catch (error) {
             console.error(`Failed to download video: ${videoId}`, error);
+            if (downloadingList.has(videoId)) downloadingList.delete(videoId);
             stream = fs.createReadStream('./restricted.mp3'); // play restricted.mp3 if failed to download
-            return;
         }
     }
     const resource = createAudioResource(stream, {

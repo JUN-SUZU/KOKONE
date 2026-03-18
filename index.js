@@ -1,4 +1,4 @@
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync } from 'fs';
 const config = JSON.parse(readFileSync('./config.json', 'utf8'));
 process.title = 'KOKONE';
 
@@ -18,10 +18,7 @@ import {
 } from '@discordjs/voice';
 
 // search on youtube
-import youtubeNode from 'youtube-node';
-const youtube = new youtubeNode();
-youtube.setKey(config.youtubeApiKey);
-youtube.addParam('type', 'video');
+import searchYoutube from './util/searchYoutube.js';
 
 // deploy from youtube playlist
 import ytpl from 'ytpl';
@@ -395,34 +392,43 @@ client.on('interactionCreate', async (interaction) => {
                 else if (searchCache[query]) createSelectMenu(interaction, searchCache[query]);
                 else {
                     // 検索
-                    youtube.search(query, 4, async function (error, result) {
-                        if (error) {
-                            console.log(`error has occurred while searching: ${keyword}`);
-                            interaction.editReply({
-                                content: 'An error has occurred while searching.\n検索中にエラーが発生しました。\nPlease try again with a different keyword.\n別のキーワードで再度お試しください。',
-                                flags: MessageFlags.Ephemeral
-                            });
-                        }
-                        else if (result.items.length == 0) {
-                            console.log(`no music found: ${keyword}`);
-                            interaction.editReply({
+                    try {
+                        const searchResult = await searchYoutube(query);
+                        if (searchResult.length == 0) {
+                            console.log(`no music found: ${query}`);
+                            return await interaction.editReply({
                                 content: 'No music found.\n曲が見つかりませんでした。',
                                 flags: MessageFlags.Ephemeral
                             });
                         }
-                        else {
-                            result.items = result.items.filter(item => item.id.kind == "youtube#video");
-                            let options = [];
-                            for (let i = 0; i < result.items.length && i < 6; i++) {
-                                options.push(
-                                    { label: result.items[i].snippet.title, description: result.items[i].snippet.channelTitle, value: result.items[i].id.videoId }
-                                );
-                                await db.videoCache.set(result.items[i].id.videoId, result.items[i].snippet.title, result.items[i].snippet.channelTitle);
-                            }
-                            searchCache[query] = options;
-                            createSelectMenu(interaction, options);
+
+                        const options = [];
+                        for (const item of searchResult) {
+                            const videoId = item.id.videoId;
+                            const title = item.snippet.title;
+                            const channelTitle = item.snippet.channelTitle;
+
+                            options.push({
+                                label: title.substring(0, 100),
+                                description: channelTitle.substring(0, 100),
+                                value: videoId
+                            });
+
+                            // DBへのキャッシュ保存
+                            await db.videoCache.set(videoId, title, channelTitle);
                         }
-                    });
+
+                        // 4. メモリキャッシュへの保存とメニュー作成
+                        searchCache[query] = options;
+                        createSelectMenu(interaction, options);
+                    } catch (error) {
+                        // 5. エラーハンドリング
+                        console.error(`error has occurred while searching: ${query}\n`, error);
+                        await interaction.editReply({
+                            content: 'An error has occurred while searching.\n検索中にエラーが発生しました。\nPlease try again with a different keyword.\n別のキーワードで再度お試しください。',
+                            flags: MessageFlags.Ephemeral
+                        });
+                    }
                 }
             }
             else if (commandName === 'stop') {
@@ -1171,6 +1177,6 @@ function parseCookies(req) {
 }
 
 client.login(config.token);
-server.listen(config.httpPort, () => {
-    console.log(`Server running at https://dashboard.kokone.jun-suzu.net/ with port ${config.httpPort} (HTTP transfered by NGINX).`);
-});
+// server.listen(config.httpPort, () => {
+//     console.log(`Server running at https://dashboard.kokone.jun-suzu.net/ with port ${config.httpPort} (HTTP transfered by NGINX).`);
+// });

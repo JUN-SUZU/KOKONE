@@ -1,5 +1,5 @@
-import { readFileSync } from 'fs';
-const config = JSON.parse(readFileSync('./config.json', 'utf8'));
+import fs from 'fs';
+const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
 process.title = 'KOKONE';
 
 // database
@@ -42,13 +42,13 @@ Platform.shim.eval = async (data, env) => {
 
     return new Function(code)();
 }
+import { Readable, PassThrough } from 'stream';
 
 // dashboard
 import http from 'http';
 import WebSocket from 'ws';
 
 // other modules
-import fs from 'fs';
 import path from 'path';
 import cron from 'node-cron';
 import { on } from 'events';
@@ -842,18 +842,37 @@ async function playMusic(connection, videoId, guildId) {
 
     // Get the audio stream for the video
     let stream;
+
+    const cacheDir = './music_cache';
+    const filePath = `${cacheDir}/${videoId}.mp4`;
+
     if (videoId === 'pF88keNV9Hw') {
         // If the video is restricted, play a specific audio file
         stream = fs.createReadStream('./pF88keNV9Hw.mp3'); // play pF88keNV9Hw.mp3 if the video is restricted
     }
+    else if (fs.existsSync(filePath)) {
+        // ローカルファイルからの再生
+        stream = fs.createReadStream(filePath);
+    }
     else {
+        // YouTubeからダウンロードしながら再生・保存
         try {
-            stream = await yt.download(videoId, {
+            const rawStream = await yt.download(videoId, {
                 type: 'audio',
                 quality: 'best',
                 format: 'mp4',
                 client: 'TV'
             });
+            const nodeStream = Readable.fromWeb(rawStream);
+            stream = new PassThrough();
+            if (!fs.existsSync(cacheDir)) {
+                fs.mkdirSync(cacheDir);
+            }
+            const fileStream = fs.createWriteStream(filePath);
+
+            // 取得した音楽データを「Discord再生用」と「ファイル保存用」の両方に流す（分岐）
+            nodeStream.pipe(stream);
+            nodeStream.pipe(fileStream);
         } catch (error) {
             console.error(`Failed to download video: ${videoId}`, error);
             stream = fs.createReadStream('./restricted.mp3'); // play restricted.mp3 if failed to download

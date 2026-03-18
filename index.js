@@ -698,13 +698,22 @@ client.on('interactionCreate', async (interaction) => {
     }
 });
 
-function createSelectMenu(interaction, videoId) {
-    if (videoId.length > 0) {
+function createSelectMenu(interaction, videoOptions) {
+    if (videoOptions && videoOptions.length > 0) {
         // ask for video selection
-        const options = videoId.map(video => {
-            let LabelString = video.label;
-            if (LabelString.length > 90) LabelString = LabelString.slice(0, 90) + '...';
-            return { label: LabelString, description: video.description, value: video.value };
+        const options = videoOptions.map(video => {
+            let labelString = video.label;
+            // descriptionが無い場合のエラー防止のため、空文字をデフォルトに
+            let descString = video.description || '';
+
+            if (labelString.length > 90) labelString = labelString.slice(0, 90) + '...';
+            if (descString.length > 90) descString = descString.slice(0, 90) + '...';
+
+            return {
+                label: labelString,
+                description: descString,
+                value: video.value
+            };
         });
         const selectMenu = new StringSelectMenuBuilder()
             .setCustomId('musicSelect')
@@ -715,16 +724,18 @@ function createSelectMenu(interaction, videoId) {
         let embed = new EmbedBuilder()
             .setTitle('Select a video to play.\n再生する曲を選択してください。')
             .setDescription('Please select a music from the list.\nリストから曲を選択してください。')
-            .setColor(baseColor);
-        // サムネイルを追加
-        // https://img.youtube.com/vi/{videoId}/default.jpg
-        embed.setThumbnail(`https://img.youtube.com/vi/${videoId[0].value}/default.jpg`);
-        return interaction.editReply({ embeds: [embed], components: [row], flags: MessageFlags.Ephemeral });
+            .setColor(baseColor)
+            // 先頭の曲のサムネイルを追加
+            .setThumbnail(`https://img.youtube.com/vi/${videoOptions[0].value}/default.jpg`);
+        return interaction.editReply({
+            embeds: [embed],
+            components: [row],
+            flags: MessageFlags.Ephemeral
+        });
     }
     else {
-        interaction.editReply({
-            content: 'Sorry, no music found for the keyword.\nキーワードに一致する曲が見つかりませんでした。' +
-                'Please try again with a different keyword.\n別のキーワードで再度お試しください。',
+        return interaction.editReply({
+            content: 'Sorry, no music found for the keyword.\nキーワードに一致する曲が見つかりませんでした。\nPlease try again with a different keyword.\n別のキーワードで再度お試しください。',
             flags: MessageFlags.Ephemeral
         });
     }

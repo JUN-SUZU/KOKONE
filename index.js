@@ -1,5 +1,5 @@
-import { readFileSync, existsSync } from 'fs';
-const config = JSON.parse(readFileSync('./config.json', 'utf8'));
+import fs from 'fs';
+const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
 process.title = 'KOKONE';
 
 // database
@@ -18,10 +18,7 @@ import {
 } from '@discordjs/voice';
 
 // search on youtube
-import youtubeNode from 'youtube-node';
-const youtube = new youtubeNode();
-youtube.setKey(config.youtubeApiKey);
-youtube.addParam('type', 'video');
+import searchYoutube from './util/searchYoutube.js';
 
 // deploy from youtube playlist
 import ytpl from 'ytpl';
@@ -45,13 +42,13 @@ Platform.shim.eval = async (data, env) => {
 
     return new Function(code)();
 }
+import { Readable, PassThrough } from 'stream';
 
 // dashboard
 import http from 'http';
 import WebSocket from 'ws';
 
 // other modules
-import fs from 'fs';
 import path from 'path';
 import cron from 'node-cron';
 import { on } from 'events';
@@ -395,34 +392,43 @@ client.on('interactionCreate', async (interaction) => {
                 else if (searchCache[query]) createSelectMenu(interaction, searchCache[query]);
                 else {
                     // 検索
-                    youtube.search(query, 4, async function (error, result) {
-                        if (error) {
-                            console.log(`error has occurred while searching: ${keyword}`);
-                            interaction.editReply({
-                                content: 'An error has occurred while searching.\n検索中にエラーが発生しました。\nPlease try again with a different keyword.\n別のキーワードで再度お試しください。',
-                                flags: MessageFlags.Ephemeral
-                            });
-                        }
-                        else if (result.items.length == 0) {
-                            console.log(`no music found: ${keyword}`);
-                            interaction.editReply({
+                    try {
+                        const searchResult = await searchYoutube(query);
+                        if (searchResult.length == 0) {
+                            console.log(`no music found: ${query}`);
+                            return await interaction.editReply({
                                 content: 'No music found.\n曲が見つかりませんでした。',
                                 flags: MessageFlags.Ephemeral
                             });
                         }
-                        else {
-                            result.items = result.items.filter(item => item.id.kind == "youtube#video");
-                            let options = [];
-                            for (let i = 0; i < result.items.length && i < 6; i++) {
-                                options.push(
-                                    { label: result.items[i].snippet.title, description: result.items[i].snippet.channelTitle, value: result.items[i].id.videoId }
-                                );
-                                await db.videoCache.set(result.items[i].id.videoId, result.items[i].snippet.title, result.items[i].snippet.channelTitle);
-                            }
-                            searchCache[query] = options;
-                            createSelectMenu(interaction, options);
+
+                        const options = [];
+                        for (const item of searchResult) {
+                            const videoId = item.id.videoId;
+                            const title = item.snippet.title;
+                            const channelTitle = item.snippet.channelTitle;
+
+                            options.push({
+                                label: title.substring(0, 100),
+                                description: channelTitle.substring(0, 100),
+                                value: videoId
+                            });
+
+                            // DBへのキャッシュ保存
+                            await db.videoCache.set(videoId, title, channelTitle);
                         }
-                    });
+
+                        // 4. メモリキャッシュへの保存とメニュー作成
+                        searchCache[query] = options;
+                        createSelectMenu(interaction, options);
+                    } catch (error) {
+                        // 5. エラーハンドリング
+                        console.error(`error has occurred while searching: ${query}\n`, error);
+                        await interaction.editReply({
+                            content: 'An error has occurred while searching.\n検索中にエラーが発生しました。\nPlease try again with a different keyword.\n別のキーワードで再度お試しください。',
+                            flags: MessageFlags.Ephemeral
+                        });
+                    }
                 }
             }
             else if (commandName === 'stop') {
@@ -692,13 +698,22 @@ client.on('interactionCreate', async (interaction) => {
     }
 });
 
-function createSelectMenu(interaction, videoId) {
-    if (videoId.length > 0) {
+function createSelectMenu(interaction, videoOptions) {
+    if (videoOptions && videoOptions.length > 0) {
         // ask for video selection
-        const options = videoId.map(video => {
-            let LabelString = video.label;
-            if (LabelString.length > 90) LabelString = LabelString.slice(0, 90) + '...';
-            return { label: LabelString, description: video.description, value: video.value };
+        const options = videoOptions.map(video => {
+            let labelString = video.label;
+            // descriptionが無い場合のエラー防止のため、空文字をデフォルトに
+            let descString = video.description || '';
+
+            if (labelString.length > 90) labelString = labelString.slice(0, 90) + '...';
+            if (descString.length > 90) descString = descString.slice(0, 90) + '...';
+
+            return {
+                label: labelString,
+                description: descString,
+                value: video.value
+            };
         });
         const selectMenu = new StringSelectMenuBuilder()
             .setCustomId('musicSelect')
@@ -709,16 +724,18 @@ function createSelectMenu(interaction, videoId) {
         let embed = new EmbedBuilder()
             .setTitle('Select a video to play.\n再生する曲を選択してください。')
             .setDescription('Please select a music from the list.\nリストから曲を選択してください。')
-            .setColor(baseColor);
-        // サムネイルを追加
-        // https://img.youtube.com/vi/{videoId}/default.jpg
-        embed.setThumbnail(`https://img.youtube.com/vi/${videoId[0].value}/default.jpg`);
-        return interaction.editReply({ embeds: [embed], components: [row], flags: MessageFlags.Ephemeral });
+            .setColor(baseColor)
+            // 先頭の曲のサムネイルを追加
+            .setThumbnail(`https://img.youtube.com/vi/${videoOptions[0].value}/default.jpg`);
+        return interaction.editReply({
+            embeds: [embed],
+            components: [row],
+            flags: MessageFlags.Ephemeral
+        });
     }
     else {
-        interaction.editReply({
-            content: 'Sorry, no music found for the keyword.\nキーワードに一致する曲が見つかりませんでした。' +
-                'Please try again with a different keyword.\n別のキーワードで再度お試しください。',
+        return interaction.editReply({
+            content: 'Sorry, no music found for the keyword.\nキーワードに一致する曲が見つかりませんでした。\nPlease try again with a different keyword.\n別のキーワードで再度お試しください。',
             flags: MessageFlags.Ephemeral
         });
     }
@@ -825,18 +842,37 @@ async function playMusic(connection, videoId, guildId) {
 
     // Get the audio stream for the video
     let stream;
+
+    const cacheDir = './music_cache';
+    const filePath = `${cacheDir}/${videoId}.mp4`;
+
     if (videoId === 'pF88keNV9Hw') {
         // If the video is restricted, play a specific audio file
         stream = fs.createReadStream('./pF88keNV9Hw.mp3'); // play pF88keNV9Hw.mp3 if the video is restricted
     }
+    else if (fs.existsSync(filePath)) {
+        // ローカルファイルからの再生
+        stream = fs.createReadStream(filePath);
+    }
     else {
+        // YouTubeからダウンロードしながら再生・保存
         try {
-            stream = await yt.download(videoId, {
+            const rawStream = await yt.download(videoId, {
                 type: 'audio',
                 quality: 'best',
                 format: 'mp4',
                 client: 'TV'
             });
+            const nodeStream = Readable.fromWeb(rawStream);
+            stream = new PassThrough();
+            if (!fs.existsSync(cacheDir)) {
+                fs.mkdirSync(cacheDir);
+            }
+            const fileStream = fs.createWriteStream(filePath);
+
+            // 取得した音楽データを「Discord再生用」と「ファイル保存用」の両方に流す（分岐）
+            nodeStream.pipe(stream);
+            nodeStream.pipe(fileStream);
         } catch (error) {
             console.error(`Failed to download video: ${videoId}`, error);
             stream = fs.createReadStream('./restricted.mp3'); // play restricted.mp3 if failed to download
@@ -1171,6 +1207,6 @@ function parseCookies(req) {
 }
 
 client.login(config.token);
-server.listen(config.httpPort, () => {
-    console.log(`Server running at https://dashboard.kokone.jun-suzu.net/ with port ${config.httpPort} (HTTP transfered by NGINX).`);
-});
+// server.listen(config.httpPort, () => {
+//     console.log(`Server running at https://dashboard.kokone.jun-suzu.net/ with port ${config.httpPort} (HTTP transfered by NGINX).`);
+// });

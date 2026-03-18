@@ -1238,6 +1238,71 @@ function parseCookies(req) {
     return Object.fromEntries(cookieHeader.split('; ').map(c => c.split('=')));
 }
 
+// ==========================================
+// グレースフル・シャットダウン (強制終了時の処理)
+// ==========================================
+async function handleShutdown(signal) {
+    console.log(`\n\n[Shutdown] ${signal} を検知しました。終了プロセスを開始します...`);
+
+    // 1. 再生中（ボイスチャンネル接続中）のサーバーをリストアップ
+    const playingGuilds = [];
+    client.guilds.cache.forEach(guild => {
+        const connection = getVoiceConnection(guild.id);
+        if (connection) {
+            playingGuilds.push(`${guild.name} (ID: ${guild.id})`);
+            try {
+                connection.destroy();
+            } catch (e) {}
+        }
+    });
+
+    console.log(`\n📢 [Active Connections] 再生中だったサーバー (${playingGuilds.length}件):`);
+    if (playingGuilds.length > 0) {
+        playingGuilds.forEach(g => console.log(`  - ${g}`));
+    } else {
+        console.log('  なし');
+    }
+
+    // 2. 書き込み中のファイル（downloadingList）の出力と削除
+    console.log(`\n💾 [Interrupted Downloads] 書き込み中だったファイル (${downloadingList.size}件):`);
+    if (downloadingList.size > 0) {
+        const cacheDir = './music_cache';
+        downloadingList.forEach(videoId => {
+            const filePath = `${cacheDir}/${videoId}.mp4`;
+            console.log(`  - ${videoId}`);
+            
+            // 書き込み途中のファイルを安全に削除
+            try {
+                if (fs.existsSync(filePath)) {
+                    // 同期的に削除 (終了処理中なのでSyncを使います)
+                    fs.unlinkSync(filePath);
+                    console.log(`    ✔️ 不完全なファイルを手動削除しました: ${filePath}`);
+                }
+            } catch (err) {
+                console.error(`    ❌ 削除失敗: ${filePath}`, err.message);
+            }
+        });
+    } else {
+        console.log('  なし');
+    }
+
+    // 3. 終了
+    console.log('\n[Shutdown] 全てのクリーンアップが完了しました。プロセスを終了します。');
+    process.exit(0); // 0は正常終了を意味します
+}
+
+// ターミナルで Ctrl+C を押したとき
+process.on('SIGINT', () => handleShutdown('SIGINT'));
+
+// PM2やsystemdなどのプロセス管理ツールが停止コマンドを送ったとき
+process.on('SIGTERM', () => handleShutdown('SIGTERM'));
+
+// 予期せぬエラーでクラッシュする寸前
+process.on('uncaughtException', (err) => {
+    console.error('\n💥 [Crash] 予期せぬエラーでクラッシュしました:', err);
+    handleShutdown('uncaughtException').catch(() => process.exit(1));
+});
+
 client.login(config.token);
 // server.listen(config.httpPort, () => {
 //     console.log(`Server running at https://dashboard.kokone.jun-suzu.net/ with port ${config.httpPort} (HTTP transfered by NGINX).`);

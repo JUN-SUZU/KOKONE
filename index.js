@@ -159,7 +159,7 @@ client.on('messageCreate', async (message) => {
         for (const guildId of guildIds) {
             const guild = client.guilds.cache.get(guildId);
             if (!guild) {
-                inexistenceGuilds += id + "\n";
+                inexistenceGuilds += guildId + "\n";
                 continue;
             }
             try {

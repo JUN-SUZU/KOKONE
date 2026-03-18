@@ -840,6 +840,7 @@ async function playMusic(connection, videoId, guildId) {
     // If you use this, the next call to signIn won't fire 'auth-pending' instead just 'auth'.
     await yt.session.oauth.cacheCredentials();
 
+
     // Get the audio stream for the video
     let stream;
 
@@ -855,7 +856,7 @@ async function playMusic(connection, videoId, guildId) {
         stream = fs.createReadStream(filePath);
     }
     else {
-        // YouTubeからダウンロードしながら再生・保存
+        // YouTubeからダウンロードしながら再生
         try {
             const rawStream = await yt.download(videoId, {
                 type: 'audio',
@@ -864,15 +865,23 @@ async function playMusic(connection, videoId, guildId) {
                 client: 'TV'
             });
             const nodeStream = Readable.fromWeb(rawStream);
-            stream = new PassThrough();
-            if (!fs.existsSync(cacheDir)) {
-                fs.mkdirSync(cacheDir);
-            }
-            const fileStream = fs.createWriteStream(filePath);
 
-            // 取得した音楽データを「Discord再生用」と「ファイル保存用」の両方に流す（分岐）
-            nodeStream.pipe(stream);
-            nodeStream.pipe(fileStream);
+            const duration = await ytdl.getBasicInfo(videoId).then(info => info.videoDetails.lengthSeconds);
+            const isLongVideo = duration > 1200;// 動画の長さ(秒)
+            if (isLongVideo) {
+                stream = nodeStream;
+            } else {
+                // durationより以下の場合のみ保存
+                stream = new PassThrough();
+                if (!fs.existsSync(cacheDir)) {
+                    fs.mkdirSync(cacheDir);
+                }
+                const fileStream = fs.createWriteStream(filePath);
+
+                // 取得した音楽データを「Discord再生用」と「ファイル保存用」の両方に流す（分岐）
+                nodeStream.pipe(stream);
+                nodeStream.pipe(fileStream);
+            }
         } catch (error) {
             console.error(`Failed to download video: ${videoId}`, error);
             stream = fs.createReadStream('./restricted.mp3'); // play restricted.mp3 if failed to download

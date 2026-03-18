@@ -82,7 +82,7 @@ const client = new Client({
 
 client.isSkip = new Collection();
 let searchCache = JSON.parse(fs.readFileSync('./searchCache.json', 'utf8'));
-const downloadingList = new Set();// ダウンロード中のvideoId
+const localDownloadingList = new Set();// このプロセスでダウンロード中のvideoId
 let playingTime = {};
 const wsConnections = {};
 
@@ -851,21 +851,20 @@ async function playMusic(connection, videoId, guildId) {
 
     const cacheDir = './music_cache';
     const filePath = `${cacheDir}/${videoId}.mp4`;
+    const tmpPath = `${cacheDir}/${videoId}.mp4.tmp`;
+    const isFileExists = fs.existsSync(filePath);
+    const isFileDownloading = fs.existsSync(tmpPath);
 
-    if (videoId === 'pF88keNV9Hw') {
-        // If the video is restricted, play a specific audio file
-        stream = fs.createReadStream('./pF88keNV9Hw.mp3'); // play pF88keNV9Hw.mp3 if the video is restricted
-    }
-    else if (fs.existsSync(filePath) && !downloadingList.has(videoId)) {
-        // ローカルファイルからの再生
+    if (isFileExists) {
+        // キャッシュから再生
         stream = fs.createReadStream(filePath);
     }
     else {
-        // YouTubeからダウンロード・保存しながら再生
+        // YouTubeからダウンロードしながら再生
         try {
-            const shouldSave = !downloadingList.has(videoId) && !isLongVideo;
+            const shouldSave = !isFileDownloading && !isLongVideo;
             if (shouldSave) {
-                downloadingList.add(videoId);
+                localDownloadingList.add(videoId);
             }
             const rawStream = await yt.download(videoId, {
                 type: 'audio',
@@ -883,31 +882,44 @@ async function playMusic(connection, videoId, guildId) {
                 if (!fs.existsSync(cacheDir)) {
                     fs.mkdirSync(cacheDir);
                 }
-                const fileStream = fs.createWriteStream(filePath);
+                const fileStream = fs.createWriteStream(tmpPath);
 
                 // 取得した音楽データを「Discord再生用」と「ファイル保存用」の両方に流す（分岐）
                 nodeStream.pipe(stream);
                 nodeStream.pipe(fileStream);
                 // 書き込み完了時、エラー発生時に削除
                 fileStream.on('finish', () => {
-                    downloadingList.delete(videoId);
+                    localDownloadingList.delete(videoId);
+                    try {
+                        fs.renameSync(tmpPath, filePath);
+                    } catch (e) {
+                        console.error(`一時ファイルのリネームに失敗しました: ${videoId}`);
+                        fs.unlink(tmpPath, (unlinkErr) => {
+                            if (unlinkErr && unlinkErr.code !== 'ENOENT') {
+                                console.error(`不完全な一時キャッシュファイルの削除に失敗しました: ${tmpPath}`, unlinkErr);
+                            }
+                        });
+                    }
                 });
                 fileStream.on('error', (err) => {
-                    console.error(`ファイル書き込みエラーが発生しました: ${videoId}`, err);
-                    downloadingList.delete(videoId);
+                    console.error(`一時ファイル書き込みエラーが発生しました: ${videoId}`, err);
+                    localDownloadingList.delete(videoId);
                     // ファイルが存在する場合のみ削除を試みる
-                    fs.unlink(filePath, (unlinkErr) => {
+                    fs.unlink(tmpPath, (unlinkErr) => {
                         if (unlinkErr && unlinkErr.code !== 'ENOENT') {
-                            console.error(`不完全なキャッシュファイルの削除に失敗しました: ${filePath}`, unlinkErr);
-                        } else {
-                            console.log(`不完全なキャッシュファイルを削除しました: ${filePath}`);
+                            console.error(`書き込みエラー発生後の一時キャッシュファイルの削除に失敗しました: ${tmpPath}`, unlinkErr);
                         }
                     });
                 });
             }
         } catch (error) {
             console.error(`Failed to download video: ${videoId}`, error);
-            if (downloadingList.has(videoId)) downloadingList.delete(videoId);
+            if (localDownloadingList.has(videoId)) localDownloadingList.delete(videoId);
+            fs.unlink(tmpPath, (unlinkErr) => {
+                if (unlinkErr && unlinkErr.code !== 'ENOENT') {
+                    console.error(`通信エラー後のキャッシュ削除に失敗しました: ${tmpPath}`, unlinkErr);
+                }
+            });
             stream = fs.createReadStream('./restricted.mp3'); // play restricted.mp3 if failed to download
         }
     }
@@ -1242,7 +1254,11 @@ function parseCookies(req) {
 // グレースフル・シャットダウン (強制終了時の処理)
 // ==========================================
 async function handleShutdown(signal) {
-    console.log(`\n\n[Shutdown] ${signal} を検知しました。終了プロセスを開始します...`);
+    // 自身のShard番号を安全に取得
+    const shardId = client.shard?.ids[0] ?? 'Not in sharding';
+    
+    let logBox = `\n╭━━━━━━ [ Shard ${shardId} : ${signal} ] ━━━━━━╮\n`;
+    logBox += `│ 🛑 終了プロセスを開始します...\n`;
 
     // 1. 再生中（ボイスチャンネル接続中）のサーバーをリストアップ
     const playingGuilds = [];
@@ -1252,43 +1268,46 @@ async function handleShutdown(signal) {
             playingGuilds.push(`${guild.name} (ID: ${guild.id})`);
             try {
                 connection.destroy();
-            } catch (e) {}
+            } catch (e) { }
         }
     });
 
-    console.log(`\n📢 [Active Connections] 再生中だったサーバー (${playingGuilds.length}件):`);
+    logBox += `├─ 📢 [Active Connections] 再生中だったサーバー (${playingGuilds.length}件):\n`;
     if (playingGuilds.length > 0) {
-        playingGuilds.forEach(g => console.log(`  - ${g}`));
+        playingGuilds.forEach(g => {
+            logBox += `│    - ${g}\n`;
+        });
     } else {
-        console.log('  なし');
+        logBox += `│    - なし\n`;
     }
 
-    // 2. 書き込み中のファイル（downloadingList）の出力と削除
-    console.log(`\n💾 [Interrupted Downloads] 書き込み中だったファイル (${downloadingList.size}件):`);
-    if (downloadingList.size > 0) {
+    // 2. 書き込み中のファイル（localDownloadingList）の出力と削除
+    logBox += `├─ 💾 [Interrupted Downloads] 破棄した一時ファイル (${localDownloadingList.size}件):\n`;
+    if (localDownloadingList.size > 0) {
         const cacheDir = './music_cache';
-        downloadingList.forEach(videoId => {
-            const filePath = `${cacheDir}/${videoId}.mp4`;
-            console.log(`  - ${videoId}`);
+        localDownloadingList.forEach(videoId => {
+            const tmpPath = `${cacheDir}/${videoId}.mp4.tmp`;
             
             // 書き込み途中のファイルを安全に削除
             try {
-                if (fs.existsSync(filePath)) {
-                    // 同期的に削除 (終了処理中なのでSyncを使います)
-                    fs.unlinkSync(filePath);
-                    console.log(`    ✔️ 不完全なファイルを手動削除しました: ${filePath}`);
+                if (fs.existsSync(tmpPath)) {
+                    fs.unlinkSync(tmpPath);
+                    logBox += `│    ✔️ 削除成功: ${videoId}.mp4.tmp\n`;
                 }
             } catch (err) {
-                console.error(`    ❌ 削除失敗: ${filePath}`, err.message);
+                logBox += `│    ❌ 削除失敗: ${videoId}.mp4.tmp (${err.message})\n`;
             }
         });
     } else {
-        console.log('  なし');
+        logBox += `│    - なし\n`;
     }
 
     // 3. 終了
-    console.log('\n[Shutdown] 全てのクリーンアップが完了しました。プロセスを終了します。');
-    process.exit(0); // 0は正常終了を意味します
+    logBox += `│ ✅ クリーンアップ完了\n`;
+    logBox += `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`;
+
+    console.log(logBox);
+    process.exit(0);
 }
 
 // ターミナルで Ctrl+C を押したとき
@@ -1299,7 +1318,8 @@ process.on('SIGTERM', () => handleShutdown('SIGTERM'));
 
 // 予期せぬエラーでクラッシュする寸前
 process.on('uncaughtException', (err) => {
-    console.error('\n💥 [Crash] 予期せぬエラーでクラッシュしました:', err);
+    // クラッシュ時はスタックトレースも出したいので分けて出力
+    console.error(`\n💥 [Shard ${client.shard?.ids[0] ?? 'Not in sharding'}] 予期せぬエラーでクラッシュしました:`, err);
     handleShutdown('uncaughtException').catch(() => process.exit(1));
 });
 

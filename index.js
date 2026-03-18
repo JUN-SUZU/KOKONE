@@ -19,6 +19,8 @@ import {
 
 // search on youtube
 import searchYoutube from './util/searchYoutube.js';
+// get video data on youtube
+import getVideoData from './util/getVideoData.js';
 
 // deploy from youtube playlist
 import ytpl from 'ytpl';
@@ -794,17 +796,9 @@ async function addVideoCache(videoId) {
     if (videoData) return true;
     try {
         // YouTube API から動画情報を取得
-        const result = await new Promise((resolve, reject) => {
-            youtube.getById(videoId, (error, result) => {
-                if (error || result.items.length === 0) {
-                    reject(error || new Error("Video not found"));
-                } else {
-                    resolve(result);
-                }
-            });
-        });
+        const result = await getVideoData(videoId)
         // 取得したデータをキャッシュに保存
-        await db.videoCache.set(videoId, result.items[0].snippet.title, result.items[0].snippet.channelTitle);
+        await db.videoCache.set(videoId, result[0].snippet.title, result[0].snippet.channelTitle);
         return true;
     } catch (error) {
         console.error(`Failed to fetch video: ${videoId}`, error);

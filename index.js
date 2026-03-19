@@ -80,7 +80,6 @@ const client = new Client({
     ]
 });
 
-client.isSkip = new Collection();// TODO: skipかどうかの判定がなくても自動で次の音楽が再生されるため、このフラグは不要
 let searchCache = JSON.parse(fs.readFileSync('./searchCache.json', 'utf8'));
 const localDownloadingList = new Set();// このプロセスでダウンロード中のvideoId
 let playingTime = {};
@@ -934,7 +933,6 @@ async function playMusic(connection, videoId, guildId) {
     connection.subscribe(player);
     player.on(AudioPlayerStatus.Idle, async () => {
         try {
-            if (client.isSkip.get(guildId)) return client.isSkip.delete(guildId);
             let queue = await db.guilds.queue.get(guildId);
             queue.shift();
             if (queue.length) {
@@ -978,10 +976,6 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
             getVoiceConnection(oldState.guild.id)?.destroy();
         }
     }
-});
-
-cron.schedule('*/10 * * * *', () => {
-    client.isSkip = client.isSkip.clone();
 });
 
 

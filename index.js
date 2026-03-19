@@ -892,7 +892,7 @@ async function playMusic(connection, videoId, guildId) {
                     try {
                         fs.renameSync(tmpPath, filePath);
                     } catch (e) {
-                        console.error(`一時ファイルのリネームに失敗しました: ${videoId}`);// TODO: エラーログに詳細 e を含める
+                        console.error(`一時ファイルのリネームに失敗しました: ${videoId}`, e);
                         fs.unlink(tmpPath, (unlinkErr) => {
                             if (unlinkErr && unlinkErr.code !== 'ENOENT') {
                                 console.error(`不完全な一時キャッシュファイルの削除に失敗しました: ${tmpPath}`, unlinkErr);

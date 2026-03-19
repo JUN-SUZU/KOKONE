@@ -978,17 +978,16 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
     }
 });
 
-
-const server = http.createServer((req, res) => {
-    function getIPAddress(req) {
-        if (req.headers['x-forwarded-for']) {
-            return req.headers['x-forwarded-for'].split(/\s*,\s*/)[0];
-        } else if (req.connection.remoteAddress) {
-            return req.connection.remoteAddress;
-        } else {
-            return req.socket.remoteAddress;
-        }
+function getIPAddress(req) {
+    if (req.headers['x-forwarded-for']) {
+        return req.headers['x-forwarded-for'].split(/\s*,\s*/)[0];
+    } else if (req.connection.remoteAddress) {
+        return req.connection.remoteAddress;
+    } else {
+        return req.socket.remoteAddress;
     }
+}
+const server = http.createServer((req, res) => {
     const url = req.url.replace(/\?.*$/, ''), method = req.method, ipadr = getIPAddress(req), now = new Date().toLocaleString();
     fs.appendFileSync('./log.txt', `${now} ${method} ${url} ${ipadr}\n`, 'utf8');
     if (method != 'POST') return;
@@ -1131,7 +1130,7 @@ const server = http.createServer((req, res) => {
 const wsServer = new WebSocket.Server({ server });
 
 wsServer.on('connection', (ws, request) => {
-    const ipadr = request.headers['x-forwarded-for'].split(/\s*,\s*/)[0];// TODO: NGINX以外でテストできるようgetIPAddress()を使う
+    const ipadr = getIPAddress(request);
     ws.on('message', async (message) => {
         try {
             const data = JSON.parse(message);
@@ -1250,7 +1249,7 @@ function parseCookies(req) {
 async function handleShutdown(signal) {// TODO: 予期せぬエラーで落ちた場合に終了コードを反映させる
     // 自身のShard番号を安全に取得
     const shardId = client.shard?.ids[0] ?? 'Not in sharding';
-    
+
     let logBox = `\n╭━━━━━━ [ Shard ${shardId} : ${signal} ] ━━━━━━╮\n`;
     logBox += `│ 🛑 終了プロセスを開始します...\n`;
 
@@ -1281,7 +1280,7 @@ async function handleShutdown(signal) {// TODO: 予期せぬエラーで落ち�
         const cacheDir = './music_cache';
         localDownloadingList.forEach(videoId => {
             const tmpPath = `${cacheDir}/${videoId}.mp4.tmp`;
-            
+
             // 書き込み途中のファイルを安全に削除
             try {
                 if (fs.existsSync(tmpPath)) {

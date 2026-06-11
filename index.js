@@ -44,6 +44,7 @@ Platform.shim.eval = async (data, env) => {
 
     return new Function(code)();
 }
+import { execSync } from 'child_process';
 import { Readable, PassThrough } from 'stream';
 
 // dashboard
@@ -858,6 +859,23 @@ async function playMusic(connection, videoId, guildId) {
         // キャッシュから再生
         stream = fs.createReadStream(filePath);
     }
+    else if (config.predownload) {
+        // 事前ダウンロードしてから再生
+        try {
+            localDownloadingList.add(videoId);
+            await execSync(`./dl.sh ${videoId}`);
+            localDownloadingList.delete(videoId);
+            if (fs.existsSync(filePath)) {
+                stream = fs.createReadStream(filePath);
+            }
+            else {
+                console.error(`Failed to download video(predownload): ${videoId} - File not found after download.`);
+                stream = fs.createReadStream('./restricted.mp3'); // play restricted.mp3 if failed to download
+            }
+        } catch (error) {
+            console.error(`Failed to download video(predownload): ${videoId}`, error);
+        }
+    }
     else {
         // YouTubeからダウンロードしながら再生
         try {
@@ -1279,16 +1297,21 @@ async function handleShutdown(signal, exitcode = 0) {
     if (localDownloadingList.size > 0) {
         const cacheDir = './music_cache';
         localDownloadingList.forEach(videoId => {
-            const tmpPath = `${cacheDir}/${videoId}.mp4.tmp`;
+            if (config.predownload) {
+                logBox += `│    ✔️ 事前ダウンロード中(ダウンロードはバックグラウンドプロセスで継続します): ${videoId}\n`;
+            }
+            else {
+                const tmpPath = `${cacheDir}/${videoId}.mp4.tmp`;
 
-            // 書き込み途中のファイルを安全に削除
-            try {
-                if (fs.existsSync(tmpPath)) {
-                    fs.unlinkSync(tmpPath);
-                    logBox += `│    ✔️ 削除成功: ${videoId}.mp4.tmp\n`;
+                // 書き込み途中のファイルを安全に削除
+                try {
+                    if (fs.existsSync(tmpPath)) {
+                        fs.unlinkSync(tmpPath);
+                        logBox += `│    ✔️ 削除成功: ${videoId}.mp4.tmp\n`;
+                    }
+                } catch (err) {
+                    logBox += `│    ❌ 削除失敗: ${videoId}.mp4.tmp (${err.message})\n`;
                 }
-            } catch (err) {
-                logBox += `│    ❌ 削除失敗: ${videoId}.mp4.tmp (${err.message})\n`;
             }
         });
     } else {

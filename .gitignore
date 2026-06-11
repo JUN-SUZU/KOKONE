@@ -9,3 +9,5 @@ pF88keNV9Hw.mp3
 music_cache/*.mp4
 music_cache/*.mp4.tmp
 node_modules/
+ytdlp/yt-dlp
+ytdlp/.yt-dlp_version

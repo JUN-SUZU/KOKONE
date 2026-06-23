@@ -5,33 +5,23 @@ const config = JSON.parse(readFileSync('./config.json', 'utf8'));
 
 export default class {
     constructor() {
-        const connect = () => {
-            this.connection = mysql.createConnection({
-                host: config.mysql.host,
-                user: config.mysql.user,
-                password: config.mysql.password,
-                database: config.mysql.database,
-                charset: 'utf8mb4'
-            });
-            // this.connectAsync = util.promisify(this.connection.connect).bind(this.connection);
-            this.connection.connect((err) => {
-                if (err) {
-                    console.error('error connecting: ' + err.stack);
-                    return;
-                }
-                console.log('connected as id ' + this.connection.threadId);
-                // SET wait_timeout = 86400;
-                // SET interactive_timeout = 86400;
-                this.connection.query('SET SESSION wait_timeout = 86400');
-                this.connection.query('SET SESSION interactive_timeout = 86400');
-            });
-            this.queryAsync = util.promisify(this.connection.query).bind(this.connection);
-            this.connection.on('error', (err) => {
-                console.log('db error', err);
-                connect();
-            });
-        }
-        connect();
+        this.pool = mysql.createPool({
+            host: config.mysql.host,
+            user: config.mysql.user,
+            password: config.mysql.password,
+            database: config.mysql.database,
+            charset: 'utf8mb4',
+            connectionLimit: 10,
+            waitForConnections: true,
+            queueLimit: 0
+        });
+        // 新しいコネクションがプールに作成された時のイベント
+        this.pool.on('connection', (connection) => {
+            console.log('connected as id ' + connection.threadId);
+            connection.query('SET SESSION wait_timeout = 86400');
+            connection.query('SET SESSION interactive_timeout = 86400');
+        });
+        this.queryAsync = util.promisify(this.pool.query).bind(this.pool);
         // this.endAsync = util.promisify(this.connection.end).bind(this.connection);
         const guilds = {
             get: async (guild_id) => {
